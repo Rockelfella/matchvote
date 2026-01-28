@@ -11,10 +11,19 @@ permissions:
 
 jobs:
   ai_dry_run_pr:
-    if: ${{ github.event.comment.body =~ '^\\s*/ai\\s*$' }}
+    if: github.event_name == 'issue_comment'
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check command
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          TRIMMED="$(printf '%s' "$COMMENT_BODY" | xargs)"
+          if [ "$TRIMMED" != "/ai" ]; then
+            exit 0
+          fi
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Node
@@ -24,7 +33,7 @@ jobs:
 
       - name: Create Draft PR (dry-run)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
@@ -32,7 +41,7 @@ jobs:
         run: node .github/scripts/ai_pr_dryrun.js
       - name: Comment back on Issue
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
         run: |
@@ -41,17 +50,26 @@ jobs:
             --body "🤖 **AI dry-run gestartet.** Draft PR: #${PR_NUMBER}"
       - name: Add ai-processed label
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
         run: gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "ai-processed"
         continue-on-error: true
 
   ai_apply_pr:
-    if: ${{ github.event.comment.body =~ '^\\s*/ai\\s+apply\\s*$' }}
+    if: github.event_name == 'issue_comment'
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check command
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          TRIMMED="$(printf '%s' "$COMMENT_BODY" | xargs)"
+          if [ "$TRIMMED" != "/ai apply" ]; then
+            exit 0
+          fi
       - name: Check ai-processed label
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -74,7 +92,7 @@ jobs:
       - name: Apply AI Patch
         id: apply
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
@@ -87,7 +105,7 @@ jobs:
       - name: Comment success on Issue and PR
         if: success()
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
         run: |
@@ -99,7 +117,7 @@ jobs:
       - name: Comment failure on Issue
         if: failure()
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
         run: |
