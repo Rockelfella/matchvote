@@ -1,0 +1,25 @@
+__pycache__/
+*.pyc
+.env
+*.log
+
+# Python virtualenv
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# pip / build cache
+.cache/
+pip-wheel-metadata/
+
+# Logs
+*.log
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+

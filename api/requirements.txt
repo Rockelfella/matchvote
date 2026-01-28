@@ -1,0 +1,9 @@
+fastapi>=0.127,<1.0
+uvicorn>=0.40,<1.0
+sqlalchemy>=2.0,<3.0
+psycopg2-binary>=2.9,<3.0
+httpx>=0.28,<1.0
+requests>=2.32,<3.0
+python-multipart>=0.0.21,<1.0
+passlib>=1.7,<2.0
+bcrypt>=5.0,<6.0

@@ -1,0 +1,52 @@
+{
+  "football": {
+    "goal": "Goal",
+    "own_goal": "Own Goal",
+    "penalty": "Penalty",
+    "penalty_goal": "Penalty Goal",
+    "missed_penalty": "Missed Penalty",
+
+    "offside": "Offside",
+    "offside_goal": "Offside Goal",
+    "offside_decision": "Offside Decision",
+
+    "foul": "Foul",
+    "handball": "Handball",
+    "handball_decision": "Handball Decision",
+
+    "red_card": "Red Card",
+    "yellow_card": "Yellow Card",
+    "second_yellow_card": "Second Yellow Card",
+
+    "free_kick": "Free Kick",
+    "direct_free_kick": "Direct Free Kick",
+    "indirect_free_kick": "Indirect Free Kick",
+
+    "corner_kick": "Corner Kick",
+    "goal_kick": "Goal Kick",
+    "throw_in": "Throw-in",
+
+    "penalty_area": "Penalty Area",
+    "six_yard_box": "Six-yard Box",
+
+    "referee": "Referee",
+    "assistant_referee": "Assistant Referee",
+    "fourth_official": "Fourth Official",
+    "referee_decision": "Referee Decision",
+
+    "var": "VAR",
+    "var_review": "VAR Review",
+    "var_decision": "VAR Decision",
+
+    "stoppage_time": "Stoppage Time",
+    "extra_time": "Extra Time",
+    "penalty_shootout": "Penalty Shootout",
+
+    "kickoff": "Kick-off",
+    "half_time": "Half-time",
+    "full_time": "Full-time",
+
+    "match_scene": "Match Scene",
+    "stoppage": "Stoppage"
+  }
+}

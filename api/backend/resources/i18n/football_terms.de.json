@@ -1,0 +1,52 @@
+{
+  "football": {
+    "goal": "Tor",
+    "own_goal": "Eigentor",
+    "penalty": "Elfmeter",
+    "penalty_goal": "Elfmetertor",
+    "missed_penalty": "Verschossener Elfmeter",
+
+    "offside": "Abseits",
+    "offside_goal": "Abseitstor",
+    "offside_decision": "Abseitsentscheidung",
+
+    "foul": "Foul",
+    "handball": "Handspiel",
+    "handball_decision": "Handspielentscheidung",
+
+    "red_card": "Rote Karte",
+    "yellow_card": "Gelbe Karte",
+    "second_yellow_card": "Gelb-Rote Karte",
+
+    "free_kick": "Freisto\u00df",
+    "direct_free_kick": "Direkter Freisto\u00df",
+    "indirect_free_kick": "Indirekter Freisto\u00df",
+
+    "corner_kick": "Eckball",
+    "goal_kick": "Absto\u00df",
+    "throw_in": "Einwurf",
+
+    "penalty_area": "Strafraum",
+    "six_yard_box": "F\u00fcnfmeterraum",
+
+    "referee": "Schiedsrichter",
+    "assistant_referee": "Linienrichter",
+    "fourth_official": "Vierter Offizieller",
+    "referee_decision": "Schiedsrichterentscheidung",
+
+    "var": "VAR",
+    "var_review": "VAR-\u00dcberpr\u00fcfung",
+    "var_decision": "VAR-Entscheidung",
+
+    "stoppage_time": "Nachspielzeit",
+    "extra_time": "Verl\u00e4ngerung",
+    "penalty_shootout": "Elfmeterschie\u00dfen",
+
+    "kickoff": "Anpfiff",
+    "half_time": "Halbzeit",
+    "full_time": "Abpfiff",
+
+    "match_scene": "Spielszene",
+    "stoppage": "Spielunterbrechung"
+  }
+}
