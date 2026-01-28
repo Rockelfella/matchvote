@@ -3,6 +3,18 @@ name: AI Issue -> Draft PR (dry-run)
 on:
   issue_comment:
     types: [created]
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Command to run (/ai or /ai apply)"
+        required: true
+        default: "/ai"
+        type: string
+      issue_number:
+        description: "Issue number to operate on"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -11,17 +23,21 @@ permissions:
 
 jobs:
   ai_dry_run_pr:
-    if: github.event_name == 'issue_comment'
+    if: github.event_name == 'issue_comment' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
       - name: Check command
         env:
-          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMAND: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
+          ISSUE_NUMBER_INPUT: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
-          TRIMMED="$(printf '%s' "$COMMENT_BODY" | xargs)"
+          TRIMMED="$(printf '%s' "$COMMAND" | xargs)"
           if [ "$TRIMMED" != "/ai" ]; then
+            exit 0
+          fi
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -z "$ISSUE_NUMBER_INPUT" ]; then
             exit 0
           fi
       - name: Checkout
@@ -32,48 +48,56 @@ jobs:
           node-version: "20"
 
       - name: Create Draft PR (dry-run)
+        if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
           ACTOR: ${{ github.actor }}
         run: node .github/scripts/ai_pr_dryrun.js
       - name: Comment back on Issue
+        if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: |
           gh issue comment "$ISSUE_NUMBER" \
             --repo "$REPO" \
             --body "🤖 **AI dry-run gestartet.** Draft PR: #${PR_NUMBER}"
       - name: Add ai-processed label
+        if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "ai-processed"
         continue-on-error: true
 
   ai_apply_pr:
-    if: github.event_name == 'issue_comment'
+    if: github.event_name == 'issue_comment' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
       - name: Check command
         env:
-          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMAND: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
+          ISSUE_NUMBER_INPUT: ${{ inputs.issue_number }}
         run: |
           set -euo pipefail
-          TRIMMED="$(printf '%s' "$COMMENT_BODY" | xargs)"
+          TRIMMED="$(printf '%s' "$COMMAND" | xargs)"
           if [ "$TRIMMED" != "/ai apply" ]; then
             exit 0
           fi
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -z "$ISSUE_NUMBER_INPUT" ]; then
+            exit 0
+          fi
       - name: Check ai-processed label
+        if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -91,10 +115,11 @@ jobs:
 
       - name: Apply AI Patch
         id: apply
+        if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
           ACTOR: ${{ github.actor }}
         run: |
@@ -103,10 +128,10 @@ jobs:
           node .github/scripts/ai_pr_apply.js 2>&1 | tee .ai/apply.log
 
       - name: Comment success on Issue and PR
-        if: success()
+        if: ${{ success() && (github.event_name == 'issue_comment' || inputs.issue_number != '') }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: |
           PR_NUMBER="$(gh pr list --repo "$REPO" --head "ai/issue-$ISSUE_NUMBER" --json number --jq '.[0].number')"
@@ -115,10 +140,10 @@ jobs:
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "ai-applied"
 
       - name: Comment failure on Issue
-        if: failure()
+        if: ${{ failure() && (github.event_name == 'issue_comment' || inputs.issue_number != '') }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: |
           ERR="$(tail -n 40 .ai/apply.log | sed 's/`/\\`/g')"
