@@ -47,3 +47,50 @@ jobs:
         run: gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "ai-processed"
         continue-on-error: true
 
+  ai_apply_pr:
+    if: contains(github.event.comment.body, '/ai apply') && contains(github.event.issue.labels.*.name, 'ai-processed')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Apply AI Patch
+        id: apply
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ai
+          node .github/scripts/ai_pr_apply.js 2>&1 | tee .ai/apply.log
+
+      - name: Comment success on Issue and PR
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          PR_NUMBER="$(gh pr list --repo "$REPO" --head "ai/issue-$ISSUE_NUMBER" --json number --jq '.[0].number')"
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "AI apply succeeded. Draft PR: #${PR_NUMBER}"
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "AI apply succeeded for issue #${ISSUE_NUMBER}."
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "ai-applied"
+
+      - name: Comment failure on Issue
+        if: failure()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          ERR="$(tail -n 40 .ai/apply.log | sed 's/`/\\`/g')"
+          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "AI apply failed.\n\n```\n${ERR}\n```"
+
