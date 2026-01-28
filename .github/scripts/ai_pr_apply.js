@@ -31,7 +31,17 @@ function httpJson(url, headers, body) {
       res.on("data", (chunk) => (data += chunk));
       res.on("end", () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`AI API error: ${res.statusCode} ${data}`));
+          let parsed = null;
+          try {
+            parsed = JSON.parse(data);
+          } catch (_) {
+            parsed = null;
+          }
+          const err = new Error(`AI API error: ${res.statusCode} ${data}`);
+          err.statusCode = res.statusCode;
+          err.body = data;
+          err.errorCode = parsed?.error?.code;
+          reject(err);
           return;
         }
         try {
@@ -156,11 +166,35 @@ async function main() {
     temperature: 0,
   });
 
-  const response = await httpJson("https://api.openai.com/v1/responses", {
-    Authorization: `Bearer ${aiKey}`,
-    "Content-Type": "application/json",
-    "Content-Length": Buffer.byteLength(payload),
-  }, payload);
+  let response;
+  try {
+    response = await httpJson("https://api.openai.com/v1/responses", {
+      Authorization: `Bearer ${aiKey}`,
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(payload),
+    }, payload);
+  } catch (err) {
+    const isQuota =
+      err?.statusCode === 429 || err?.errorCode === "insufficient_quota";
+    if (isQuota) {
+      console.error("AI apply blocked: OpenAI quota/billing exhausted.");
+      const blockedMsg =
+        "🚫 AI apply blocked: OpenAI quota/billing exhausted for AI_API_KEY. Please fix billing or update the key, then re-run /ai apply.";
+      sh(
+        `gh issue comment ${issueNumber} --repo ${repo} --body "${blockedMsg.replace(/"/g, '\\"')}"`
+      );
+      if (prNumber) {
+        sh(
+          `gh pr comment ${prNumber} --repo ${repo} --body "${blockedMsg.replace(/"/g, '\\"')}"`
+        );
+      }
+      sh(
+        `gh issue edit ${issueNumber} --repo ${repo} --add-label "ai-blocked" || true`
+      );
+      process.exit(0);
+    }
+    throw err;
+  }
 
   const diffText = extractDiffText(response);
   const maxBytes = 200_000;
