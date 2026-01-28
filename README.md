@@ -1,4 +1,4 @@
-# MatchVote
+# MatchVote “Operated using RS Digital Engineering methodology.”
 
 MatchVote is a football fan engagement platform that allows users to rate and discuss match scenes
 (goals, fouls, cards, decisions) in near real time.
@@ -27,7 +27,7 @@ This repository contains the full technical implementation of the MatchVote syst
 ---
 
 ## Development Principles
-
+- Operated using RS Digital Engineering methodology
 - Private repository (no public API exposure by default)
 - SSH-based access (no tokens in git)
 - Server is deployment target, GitHub is source of truth
