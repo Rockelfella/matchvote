@@ -6,15 +6,23 @@ on:
   workflow_dispatch:
     inputs:
       command:
-        description: "Command to run (/ai or /ai apply)"
+        description: "Command to run"
         required: true
         default: "/ai"
-        type: string
+        type: choice
+        options:
+          - "/ai"
+          - "/ai apply"
       issue_number:
         description: "Issue number to operate on"
-        required: false
+        required: true
         default: ""
         type: string
+      confirm:
+        description: "Confirm manual run"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -27,17 +35,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check command
+      - name: Safety gate
         env:
-          COMMAND: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
+          COMMAND_RAW: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
           ISSUE_NUMBER_INPUT: ${{ inputs.issue_number }}
+          CONFIRM_INPUT: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
-          TRIMMED="$(printf '%s' "$COMMAND" | xargs)"
-          if [ "$TRIMMED" != "/ai" ]; then
-            exit 0
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            if [ -z "$ISSUE_NUMBER_INPUT" ] || [ "$CONFIRM_INPUT" != "true" ]; then
+              echo "Refusing to run: set issue_number and confirm=true"
+              exit 1
+            fi
           fi
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -z "$ISSUE_NUMBER_INPUT" ]; then
+          TRIMMED="$(printf '%s' "$COMMAND_RAW" | xargs)"
+          if [ "${GITHUB_EVENT_NAME}" = "issue_comment" ]; then
+            if [ "$TRIMMED" != "/ai" ] && [ "$TRIMMED" != "/ai apply" ]; then
+              exit 0
+            fi
+          fi
+          if [ "$TRIMMED" != "/ai" ]; then
             exit 0
           fi
       - name: Checkout
@@ -80,17 +97,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check command
+      - name: Safety gate
         env:
-          COMMAND: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
+          COMMAND_RAW: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
           ISSUE_NUMBER_INPUT: ${{ inputs.issue_number }}
+          CONFIRM_INPUT: ${{ inputs.confirm }}
         run: |
           set -euo pipefail
-          TRIMMED="$(printf '%s' "$COMMAND" | xargs)"
-          if [ "$TRIMMED" != "/ai apply" ]; then
-            exit 0
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            if [ -z "$ISSUE_NUMBER_INPUT" ] || [ "$CONFIRM_INPUT" != "true" ]; then
+              echo "Refusing to run: set issue_number and confirm=true"
+              exit 1
+            fi
           fi
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && [ -z "$ISSUE_NUMBER_INPUT" ]; then
+          TRIMMED="$(printf '%s' "$COMMAND_RAW" | xargs)"
+          if [ "${GITHUB_EVENT_NAME}" = "issue_comment" ]; then
+            if [ "$TRIMMED" != "/ai" ] && [ "$TRIMMED" != "/ai apply" ]; then
+              exit 0
+            fi
+          fi
+          if [ "$TRIMMED" != "/ai apply" ]; then
             exit 0
           fi
       - name: Check ai-processed label
