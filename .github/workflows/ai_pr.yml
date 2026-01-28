@@ -1,0 +1,30 @@
+name: AI Issue -> Draft PR (dry-run)
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+
+jobs:
+  ai_dry_run_pr:
+    if: contains(github.event.comment.body, '/ai')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify AI_API_KEY is present (no output)
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+        run: |
+          if [ -z "$AI_API_KEY" ]; then
+            echo "AI_API_KEY is NOT set"
+            exit 1
+          else
+            echo "AI_API_KEY is set"
+          fi
