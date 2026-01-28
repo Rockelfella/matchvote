@@ -49,3 +49,12 @@ This repository contains the full technical implementation of the MatchVote syst
 
 This repository is under active development.
 Structure, tooling and workflows are intentionally kept explicit and auditable.
+
+---
+
+---
+
+## Engineering Methodology
+
+MatchVote is operated using **RS Digital Engineering** methodology (human-owned, auditable Agent-Driven Development).
+Reference: https://github.com/rs-digital-engineering/foundation
