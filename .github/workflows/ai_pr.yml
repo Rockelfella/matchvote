@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   ai_dry_run_pr:
-    if: contains(github.event.comment.body, '/ai')
+    if: ${{ github.event.comment.body =~ '^\\s*/ai\\s*$' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -48,10 +48,22 @@ jobs:
         continue-on-error: true
 
   ai_apply_pr:
-    if: contains(github.event.comment.body, '/ai apply') && contains(github.event.issue.labels.*.name, 'ai-processed')
+    if: ${{ github.event.comment.body =~ '^\\s*/ai\\s+apply\\s*$' }}
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check ai-processed label
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          LABELS="$(gh api repos/$REPO/issues/$ISSUE_NUMBER --jq '.labels[].name' || true)"
+          if ! printf '%s\n' "$LABELS" | grep -xq "ai-processed"; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "⚠️ Please run /ai first (dry-run) before /ai apply."
+            exit 0
+          fi
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Node
