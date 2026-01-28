@@ -17,14 +17,3 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Verify AI_API_KEY is present (no output)
-        env:
-          AI_API_KEY: ${{ secrets.AI_API_KEY }}
-        run: |
-          if [ -z "$AI_API_KEY" ]; then
-            echo "AI_API_KEY is NOT set"
-            exit 1
-          else
-            echo "AI_API_KEY is set"
-          fi
