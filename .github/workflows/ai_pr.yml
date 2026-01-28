@@ -30,4 +30,10 @@ jobs:
           REPO: ${{ github.repository }}
           ACTOR: ${{ github.actor }}
         run: node .github/scripts/ai_pr_dryrun.js
+      - name: Comment back on Issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "🤖 **AI dry-run gestartet.** Draft PR: #${PR_NUMBER}"
 

@@ -4,6 +4,7 @@
  * No AI patch generation yet.
  */
 const { execSync } = require("node:child_process");
+const fs = require("node:fs");
 
 function sh(cmd) {
   return execSync(cmd, { stdio: "pipe", encoding: "utf8" }).trim();
@@ -21,6 +22,7 @@ function mustEnv(name) {
 const repo = mustEnv("REPO");
 const issueNumber = mustEnv("ISSUE_NUMBER");
 const actor = mustEnv("ACTOR");
+const githubEnv = mustEnv("GITHUB_ENV");
 
 const branch = `ai/issue-${issueNumber}`;
 const title = `AI (dry-run): Issue #${issueNumber}`;
@@ -68,15 +70,17 @@ EOF'`);
     `gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number' || true`
   );
   if (existing) {
+    fs.appendFileSync(githubEnv, `PR_NUMBER=${existing}\n`, "utf8");
     console.log(`PR already exists: #${existing}`);
     process.exit(0);
   }
 
-  sh(
-    `gh pr create --repo ${repo} --head ${branch} --base ${defaultBranch} --draft --title "${title}" --body "${body.replace(/"/g, '\\"')}"`
+  const created = sh(
+    `gh pr create --repo ${repo} --head ${branch} --base ${defaultBranch} --draft --title "${title}" --body "${body.replace(/"/g, '\\"')}" --json number --jq .number`
   );
+  fs.appendFileSync(githubEnv, `PR_NUMBER=${created}\n`, "utf8");
 
-  console.log("Draft PR created.");
+  console.log(`Draft PR created: #${created}`);
 } catch (err) {
   console.error(err?.message || err);
   process.exit(1);
