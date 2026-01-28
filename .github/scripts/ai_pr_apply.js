@@ -74,6 +74,28 @@ function extractDiffText(responseJson) {
   return "";
 }
 
+function extractUnifiedDiff(rawText) {
+  if (!rawText) return "";
+  const cleaned = rawText.replace(/```diff\s*/g, "").replace(/```\s*/g, "");
+  const idx = cleaned.indexOf("diff --git ");
+  if (idx === -1) return "";
+  return cleaned.slice(idx).trim();
+}
+
+function isProbablyValidDiff(diffText) {
+  if (!diffText) return false;
+  const lines = diffText.split(/\r?\n/);
+  const hasDiff = lines.some((l) => l.startsWith("diff --git "));
+  const hasMinus = lines.some((l) => l.startsWith("--- "));
+  const hasPlus = lines.some((l) => l.startsWith("+++ "));
+  if (!hasDiff || !hasMinus || !hasPlus) return false;
+  const lower = diffText.toLowerCase();
+  if (lower.includes("here is") || lower.includes("sure") || lower.includes("explanation:")) {
+    return false;
+  }
+  return true;
+}
+
 function getTouchedFiles(diffText) {
   const files = new Set();
   const lines = diffText.split(/\r?\n/);
@@ -96,6 +118,10 @@ function isDenylisted(path, denyPrefixes, allowPackageLock) {
   if (!allowPackageLock && path === "package-lock.json") return true;
   if (/(^|\/)secrets(\/|$)/i.test(path)) return true;
   return false;
+}
+
+function escapeBody(body) {
+  return String(body).replace(/`/g, "\\`").replace(/"/g, '\\"');
 }
 
 async function main() {
@@ -196,12 +222,35 @@ async function main() {
     throw err;
   }
 
-  const diffText = extractDiffText(response);
-  const maxBytes = 200_000;
-  if (!diffText) {
-    console.error("AI returned empty diff");
-    process.exit(1);
+  const rawText = extractDiffText(response);
+  const diffText = extractUnifiedDiff(rawText);
+  if (!diffText || !isProbablyValidDiff(diffText)) {
+    const snippet = rawText
+      .split(/\r?\n/)
+      .slice(0, 40)
+      .join("\n");
+    const msg =
+      "🚫 AI produced an invalid patch format (corrupt/unified diff missing). Please refine the issue or re-run /ai apply. The PR was not changed.";
+    const details = [
+      "<details>",
+      "<summary>Raw AI output (first ~40 lines)</summary>",
+      "",
+      "```",
+      snippet,
+      "```",
+      "</details>",
+    ].join("\n");
+    sh(
+      `gh issue comment ${issueNumber} --repo ${repo} --body "${escapeBody(`${msg}\n\n${details}`)}"`
+    );
+    if (prNumber) {
+      sh(
+        `gh pr comment ${prNumber} --repo ${repo} --body "${escapeBody(`${msg}\n\n${details}`)}"`
+      );
+    }
+    process.exit(0);
   }
+  const maxBytes = 200_000;
   if (Buffer.byteLength(diffText, "utf8") > maxBytes) {
     console.error("AI diff exceeds size limit");
     process.exit(1);
@@ -232,6 +281,32 @@ async function main() {
   sh(`mkdir -p .ai`);
   const patchPath = `.ai/ai_patch_${issueNumber}.diff`;
   fs.writeFileSync(patchPath, diffText, "utf8");
+
+  try {
+    sh(`git apply --check ${patchPath}`);
+  } catch (err) {
+    const out = (err?.stderr || err?.stdout || err?.message || "").toString();
+    const msg =
+      "🚫 Patch could not be applied cleanly (git apply --check failed). No changes were committed.";
+    const details = [
+      "<details>",
+      "<summary>git apply --check output</summary>",
+      "",
+      "```",
+      out.trim(),
+      "```",
+      "</details>",
+    ].join("\n");
+    sh(
+      `gh issue comment ${issueNumber} --repo ${repo} --body "${escapeBody(`${msg}\n\n${details}`)}"`
+    );
+    if (prNumber) {
+      sh(
+        `gh pr comment ${prNumber} --repo ${repo} --body "${escapeBody(`${msg}\n\n${details}`)}"`
+      );
+    }
+    process.exit(0);
+  }
 
   try {
     sh(`git apply ${patchPath}`);
