@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MatchVote - Statistik</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/mv-ui.css">
+</head>
+<body class="mv-page mv-stats mv-theme-violet" data-page="match-stats">
+  <nav class="topbar mv-topbar">
+    <div class="brand">
+      <button class="logo mv-menu-toggle mv-icon-btn mv-icon-btn--md" id="mvMenuToggle" type="button" aria-label="Menü öffnen" aria-expanded="false">MV</button>
+      <div class="brand-text">
+        <div class="mv-brand-title">MatchVote</div>
+        <small>Community Preview</small>
+      </div>
+    </div>
+    <div class="nav-user mv-top-actions">
+      <a class="mv-icon-btn mv-icon-btn--md" href="ratings.html" title="Bewertungen" aria-label="Bewertungen">
+        <span aria-hidden="true">★</span>
+        <span class="sr-only">Bewertungen</span>
+      </a>
+      <a class="mv-icon-btn mv-icon-btn--md" href="roadmap.html" title="Roadmap" aria-label="Roadmap">
+        <span aria-hidden="true">🏁</span>
+        <span class="sr-only">Roadmap</span>
+      </a>
+      <a class="mv-icon-btn mv-icon-btn--md" href="user.html" title="Profil" aria-label="Profil">
+        <span aria-hidden="true">👤</span>
+        <span class="sr-only">Profil</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="mv-drawer-overlay" id="mvDrawerOverlay"></div>
+  <aside class="mv-drawer" id="mvDrawer" aria-label="Navigation">
+    <div class="mv-drawer-header">
+      <div class="logo">MV</div>
+      <div>
+        <div class="mv-drawer-title">MatchVote</div>
+        <div class="mv-drawer-sub">Szenenbewertung</div>
+      </div>
+    </div>
+    <nav class="mv-drawer-nav">
+      <a href="index.html">Start</a>
+      <a href="ratings.html">Bewertungen</a>
+      <a href="roadmap.html">Roadmap</a>
+      <a href="admin.html">Admin</a>
+      <a href="user.html">Profil</a>
+      <a href="privacy.html">Datenschutz</a>
+      <a href="impressum.html">Impressum</a>
+      <a href="credits.html">Credits</a>
+      <a href="#" data-logout>Abmelden</a>
+    </nav>
+  </aside>
+
+  <header class="hero mv-stats-hero">
+    <div class="mv-stats-hero-main">
+      <div class="mv-stats-kicker">Spiel-Statistik</div>
+      <h1 id="statsMatchTitle">Lade Statistik…</h1>
+      <div class="sub" id="statsMatchSub">Bitte warten...</div>
+    </div>
+    <div class="pill">API-Basis: <span id="apiBasePill">/api</span></div>
+  </header>
+
+  <main class="mv-content mv-stats-content">
+    <input id="manualMatchId" type="hidden" value="" />
+    <input id="manualSceneId" type="hidden" value="" />
+
+    <section class="card mv-stats-summary" id="matchSummaryBox">
+      <div class="mv-stats-summary-head">
+        <div>
+          <h2>Übersicht</h2>
+          <div class="muted">Gesamtauswertung aller Bewertungen dieses Spiels.</div>
+        </div>
+        <div class="mv-stats-pills">
+          <span class="pill" id="sumTotalRatings">0 Bewertungen</span>
+          <span class="pill" id="sumRatedScenes">0 Szenen bewertet</span>
+        </div>
+      </div>
+
+      <div class="mv-stats-hero-grid">
+        <div class="mv-stats-kpi">
+          <div class="muted">Ø Entscheidung</div>
+          <div class="mv-inline mv-gap-top">
+            <span id="sumAvgDecisionStars"></span>
+            <span class="readonly-meta" id="sumAvgDecisionMeta"></span>
+          </div>
+        </div>
+        <div class="mv-stats-kpi">
+          <div class="muted">Ø Sicherheit</div>
+          <div class="mv-inline mv-gap-top">
+            <span id="sumAvgConfidenceStars"></span>
+            <span class="readonly-meta" id="sumAvgConfidenceMeta"></span>
+          </div>
+        </div>
+        <div class="mv-stats-kpi">
+          <div class="muted">Bewertungen gesamt</div>
+          <div class="mv-inline mv-gap-top">
+            <span id="ratingCountPill" class="pill">0</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="mv-stats-grid">
+      <div class="card mv-stats-card">
+        <div class="section-title">
+          <h2>Verteilung Entscheidung</h2>
+          <p>Bewertungen nach Entscheidungs-Score.</p>
+        </div>
+        <div id="sumDecisionDist" class="mv-gap-top-sm"></div>
+      </div>
+
+      <div class="card mv-stats-card">
+        <div class="section-title">
+          <h2>Verteilung Sicherheit</h2>
+          <p>Bewertungen nach Sicherheit.</p>
+        </div>
+        <div id="sumConfidenceDist" class="mv-gap-top-sm"></div>
+      </div>
+    </section>
+
+    <section class="mv-stats-grid mv-gap-top-lg">
+      <div class="card mv-stats-card">
+        <div class="section-title">
+          <h2>Kanäle</h2>
+          <p>Wie die Szenen gesehen wurden.</p>
+        </div>
+        <div id="sumChannelDist" class="mv-gap-top-sm"></div>
+      </div>
+
+      <div class="card mv-stats-card">
+        <div class="section-title">
+          <h2>Zeitpunkt</h2>
+          <p>Wann bewertet wurde.</p>
+        </div>
+        <div id="sumTimeDist" class="mv-gap-top-sm"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-links">
+      <a href="impressum.html">Impressum</a>
+    </div>
+    &copy; MatchVote
+    <span class="muted">&middot;</span>
+    <a href="privacy.html">Datenschutz</a>
+    <span class="muted">&middot;</span>
+    <a href="credits.html">Credits</a>
+  </footer>
+
+  <script src="/ratings.js?v=20260126_stats2"></script>
+  <script src="/app-nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,386 @@
+﻿<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MatchVote - Szene bewerten</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/mv-ui.css">
+ </head>
+<body class="mv-page mv-rate mv-theme-violet" data-page="rate">
+  <nav class="topbar mv-topbar">
+    <div class="brand">
+      <button class="logo mv-menu-toggle mv-icon-btn mv-icon-btn--md" id="mvMenuToggle" type="button" aria-label="Menü öffnen" aria-expanded="false">MV</button>
+      <div class="brand-text">
+        <div class="mv-brand-title">MatchVote</div>
+        <small>Community Preview</small>
+      </div>
+    </div>
+    <div class="nav-user mv-top-actions">
+      <a class="icon-btn" href="ratings.html" title="Zurück" aria-label="Zurück">←</a>
+      <a class="mv-icon-btn mv-icon-btn--md" href="roadmap.html" title="Roadmap" aria-label="Roadmap">
+        <span aria-hidden="true">🏁</span>
+        <span class="sr-only">Roadmap</span>
+      </a>
+      <a class="mv-icon-btn mv-icon-btn--md" href="user.html" title="Profil" aria-label="Profil">
+        <span aria-hidden="true">👤</span>
+        <span class="sr-only">Profil</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="mv-drawer-overlay" id="mvDrawerOverlay"></div>
+  <aside class="mv-drawer" id="mvDrawer" aria-label="Navigation">
+    <div class="mv-drawer-header">
+      <div class="logo">MV</div>
+      <div>
+        <div class="mv-drawer-title">MatchVote</div>
+        <div class="mv-drawer-sub">Szenenbewertung</div>
+      </div>
+    </div>
+    <nav class="mv-drawer-nav">
+      <a href="index.html">Start</a>
+      <a href="ratings.html" class="active">Bewertungen</a>
+      <a href="roadmap.html">Roadmap</a>
+      <a href="admin.html">Admin</a>
+      <a href="user.html">Profil</a>
+      <a href="privacy.html">Datenschutz</a>
+      <a href="impressum.html">Impressum</a>
+      <a href="credits.html">Credits</a>
+      <a href="#" data-logout>Abmelden</a>
+    </nav>
+  </aside>
+
+  <header class="hero mv-rate-hero">
+    <div>
+      <h1 id="rateMatchTitle">Lade Spiel…</h1>
+      <div class="sub" id="rateMatchSub">Bitte warten...</div>
+    </div>
+    <div class="pill">API-Basis: <span id="apiBasePill">/api</span></div>
+  </header>
+  <!-- legacy nav removed -->
+
+  <!-- legacy header removed
+    <h1>MatchVote - Bewertungen</h1>
+    <div class="sub">
+      Produktansicht: Spiel w&auml;hlen -> Szene w&auml;hlen -> bewerten.
+      API Base: <span class="pill" id="apiBasePill">/api</span>
+    </div>
+  -->
+
+  <main class="mv-content">
+    <input id="manualMatchId" type="hidden" value="" />
+    <input id="manualSceneId" type="hidden" value="" />
+
+    <section class="card" id="tabScene" style="display:none;">
+      <div class="section-title">
+        <h2>Szene</h2>
+        <p>W&auml;hle eine Szene aus dem ausgew&auml;hlten Spiel.</p>
+      </div>
+      <div class="scene-layout mv-scene-layout">
+        <div class="mv-scene-column">
+          <label>Szene ausw&auml;hlen</label>
+          <div class="mv-scene-panel">
+          <div id="sceneList" class="scene-list" role="listbox" aria-label="Szenenliste"></div>
+          </div>
+          <select id="scenesSelect" class="sr-only" aria-hidden="true"></select>
+          <div class="muted">Klicke eine Szene, um Details zu sehen.</div>
+          <div id="sceneNotice" class="notice mv-gap-top" style="display:none;"></div>
+        </div>
+        <div class="sceneHeader mv-scene-details" id="sceneHeader">
+          <div class="sceneTitle" id="sceneTitle">Keine Szene gew&auml;hlt</div>
+          <div class="sceneMeta" id="sceneMeta"></div>
+          <div class="hr mv-hr-tight"></div>
+          <div id="sceneDesc" class="sceneDesc">W&auml;hle ein Spiel und eine Szene, um Details zu sehen.</div>
+        </div>
+      </div>
+      <div class="hr"></div>
+
+      <div class="details-grid">
+        <div class="detail-card">
+          <div class="detail-title">Spiel</div>
+          <div class="detail-grid" id="matchFacts"></div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-title">Szene</div>
+          <div class="detail-grid" id="sceneFacts"></div>
+        </div>
+      </div>
+
+      <!-- Aggregate Sterne (nur UI, keine Debug-Antwort) -->
+      <div class="detail-card mv-gap-top-lg">
+        <div class="detail-title">Aggregate</div>
+        <div class="muted">Durchschnitt aus allen bisherigen Bewertungen.</div>
+        <div class="mv-inline mv-gap-top">
+          <strong class="mv-label-small">&Oslash; Entscheidung:</strong>
+          <span id="avgDecisionStars"></span>
+          <span class="readonly-meta" id="avgDecisionMeta"></span>
+        </div>
+        <div class="mv-inline mv-gap-top">
+          <strong class="mv-label-small">&Oslash; Sicherheit:</strong>
+          <span id="avgConfidenceStars"></span>
+          <span class="readonly-meta" id="avgConfidenceMeta"></span>
+        </div>
+        <div class="muted mv-gap-top">Bewertungen: <span class="pill" id="ratingCountPill">0</span></div>
+      </div>
+
+      <!-- Spiel-Auswertung (nur wenn keine Szene gewählt) -->
+      <div id="matchSummaryBox" class="mv-panel mv-gap-top-lg" style="display:none;">
+        <div class="mv-inline">
+          <strong class="mv-label-small">Spiel-Auswertung</strong>
+          <span class="pill" id="sumTotalRatings">0 Bewertungen</span>
+          <span class="pill" id="sumRatedScenes">0 Szenen bewertet</span>
+        </div>
+
+        <div class="hr mv-hr-tight"></div>
+
+        <div class="row">
+          <div>
+            <div class="muted">&Oslash; Entscheidung</div>
+            <div class="mv-inline mv-gap-top">
+              <span id="sumAvgDecisionStars"></span>
+              <span class="readonly-meta" id="sumAvgDecisionMeta"></span>
+            </div>
+
+            <div class="muted mv-gap-top">Verteilung Entscheidung</div>
+            <div id="sumDecisionDist" class="mv-gap-top-sm"></div>
+          </div>
+
+          <div>
+            <div class="muted">&Oslash; Sicherheit</div>
+            <div class="mv-inline mv-gap-top">
+              <span id="sumAvgConfidenceStars"></span>
+              <span class="readonly-meta" id="sumAvgConfidenceMeta"></span>
+            </div>
+
+            <div class="muted mv-gap-top">Verteilung Sicherheit</div>
+            <div id="sumConfidenceDist" class="mv-gap-top-sm"></div>
+          </div>
+        </div>
+
+        <div class="hr mv-hr-wide"></div>
+
+        <div class="row">
+          <div>
+            <div class="muted">Kanäle</div>
+            <div id="sumChannelDist" class="mv-gap-top-sm"></div>
+          </div>
+          <div>
+            <div class="muted">Zeitpunkt</div>
+            <div id="sumTimeDist" class="mv-gap-top-sm"></div>
+          </div>
+        </div>
+
+        <div class="hr mv-hr-wide"></div>
+
+        <div>
+          <div class="muted">Zur Szene springen</div>
+          <div class="muted mv-gap-top-sm">Springt nach oben zur Szenenauswahl.</div>
+          <button id="jumpToSceneBtn" class="mv-btn mv-btn--outline mv-btn--md mv-gap-top" type="button">Nach oben zur Szenenauswahl</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="hr"></div>
+
+    <section class="card" id="ratingSection" style="display:none;">
+      <div class="section-title">
+        <h2>Bewertung</h2>
+        <p>Beurteile Entscheidung und Sicherheit, dann absenden.</p>
+      </div>
+      <div class="detail-card scene-context">
+        <div class="detail-title">Szenenbeschreibung</div>
+        <div id="ratingSceneDesc" class="sceneDesc">W&auml;hle eine Szene, um die Beschreibung zu sehen.</div>
+      </div>
+
+      <div class="row">
+        <div>
+                    <label>Wahrnehmungskanal</label>
+          <div class="choice-row" id="channelChoices">
+            <button type="button" data-value="TV">TV-Übertragung</button>
+            <button type="button" data-value="STADIUM">Stadion</button>
+            <button type="button" data-value="STREAM">Online-Stream</button>
+            <button type="button" data-value="HIGHLIGHT">Highlight<br>Wiederholung</button>
+          </div>
+          <select id="rateChannel" class="sr-only">
+            <option value="STADIUM">STADIUM</option>
+            <option value="TV" selected>TV</option>
+            <option value="STREAM">STREAM</option>
+            <option value="HIGHLIGHT">HIGHLIGHT</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+                    <label>Regelkenntnis</label>
+          <div class="choice-row" id="ruleChoices">
+            <button type="button" data-value="LOW">Grundlegend</button>
+            <button type="button" data-value="MEDIUM">Fortgeschritten</button>
+            <button type="button" data-value="HIGH">Experte</button>
+          </div>
+          <select id="rateRule" class="sr-only">
+            <option value="LOW">LOW</option>
+            <option value="MEDIUM" selected>MEDIUM</option>
+            <option value="HIGH">HIGH</option>
+          </select>
+        </div>
+        <div>
+                    <label>Bewertungszeitpunkt</label>
+          <div class="choice-row" id="timeChoices">
+            <button type="button" data-value="LIVE">Live (erster Eindruck)</button>
+            <button type="button" data-value="AFTER_REPLAY">Nach Wiederholung</button>
+            <button type="button" data-value="AFTER_VAR">Nach VAR</button>
+            <button type="button" data-value="LATER">Spätere Bewertung</button>
+          </div>
+          <select id="rateTimeType" class="sr-only">
+            <option value="LIVE" selected>LIVE</option>
+            <option value="AFTER_REPLAY">AFTER_REPLAY</option>
+            <option value="AFTER_VAR">AFTER_VAR</option>
+            <option value="LATER">LATER</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <label>Lieblingsteam (optional)</label>
+          <select id="rateFavTeam"></select>
+          <div class="muted">Muss zu den Teams des Spiels passen.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div>
+          <!-- decision_score stars -->
+          <div class="rating-group">
+            <div class="rating-label-row">
+              <label for="rateDecision">Entscheidung / Aktion (1-5)</label>
+              <div class="star-rating rating-scale" data-field="rateDecision" role="radiogroup" aria-label="Decision Score">
+                <span role="radio" aria-checked="false" tabindex="0" data-value="1" aria-label="1 Stern">&#9733;</span>
+                <span role="radio" aria-checked="false" tabindex="-1" data-value="2" aria-label="2 Sterne">&#9733;</span>
+                <span role="radio" aria-checked="false" tabindex="-1" data-value="3" aria-label="3 Sterne">&#9733;</span>
+                <span role="radio" aria-checked="false" tabindex="-1" data-value="4" aria-label="4 Sterne">&#9733;</span>
+                <span role="radio" aria-checked="false" tabindex="-1" data-value="5" aria-label="5 Sterne">&#9733;</span>
+              </div>
+            </div>
+            <div class="rating-hint">
+              <div class="hint-scale">
+                <span class="hint-pill"><strong>1</strong> v&ouml;llig daneben</span>
+                <span class="hint-pill"><strong>3</strong> vertretbar</span>
+                <span class="hint-pill"><strong>5</strong> perfekt</span>
+              </div>
+            </div>
+            <input id="rateDecision" type="hidden" value="" />
+            <div class="rating-error" id="rateDecision_error">Bitte Entscheidung/Aktion mit 1-5 Sternen bewerten.</div>
+          </div>
+        </div>
+
+        <div>
+          <!-- confidence_score stars -->
+          <div class="rating-group">
+            <div class="rating-label-row">
+              <label for="rateConfidence">Sicherheit (1-5)</label>
+              <div class="star-rating rating-scale" data-field="rateConfidence" role="radiogroup" aria-label="Confidence Score">
+                <span role="radio" aria-checked="false" tabindex="0" data-value="1" aria-label="1 Stern">&#9733;</span>
+                <span role="radio" aria-checked="false" tabindex="-1" data-value="2" aria-label="2 Sterne">&#9733;</span>
+                <span role="radio" aria-checked="false" tabindex="-1" data-value="3" aria-label="3 Sterne">&#9733;</span>
+                <span role="radio" aria-checked="false" tabindex="-1" data-value="4" aria-label="4 Sterne">&#9733;</span>
+                <span role="radio" aria-checked="false" tabindex="-1" data-value="5" aria-label="5 Sterne">&#9733;</span>
+              </div>
+            </div>
+            <div class="rating-hint">
+              <div class="hint-scale">
+                <span class="hint-pill"><strong>1</strong> geraten</span>
+                <span class="hint-pill"><strong>3</strong> eher sicher</span>
+                <span class="hint-pill"><strong>5</strong> absolut sicher</span>
+              </div>
+            </div>
+            <input id="rateConfidence" type="hidden" value="" />
+            <div class="rating-error" id="rateConfidence_error">Bitte Sicherheit mit 1-5 Sternen angeben.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row mv-gap-top rating-actions">
+      <div><button id="sendRatingBtn" class="mv-btn mv-btn--primary mv-btn--md" onclick="sendRating()" disabled>Bewertung senden</button></div>
+      <div><button class="mv-btn mv-btn--outline mv-btn--md" onclick="loadMatchRatingsSummary()">Auswertung f&uuml;r dieses Spiel</button></div>
+      </div>
+
+      <label class="mv-gap-top-lg">Antwort</label>
+      <pre id="ratingOut" class="muted"></pre>
+
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-links">
+      <a href="impressum.html">Impressum</a>
+    </div>
+    &copy; MatchVote
+    <span class="muted">&middot;</span>
+    <a href="privacy.html">Datenschutz</a>
+    <span class="muted">&middot;</span>
+    <a href="credits.html">Credits</a>
+  </footer>
+
+<script src="/ratings.js?v=20260126_stats2"></script>
+  <script src="/app-nav.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

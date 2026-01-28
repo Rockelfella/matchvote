@@ -1,0 +1,1045 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MatchVote - Administration</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/mv-ui.css">
+</head>
+<body class="mv-page mv-admin mv-theme-violet">
+  <nav class="topbar">
+    <div class="brand">
+      <button class="logo mv-menu-toggle mv-icon-btn mv-icon-btn--md" id="mvMenuToggle" type="button" aria-label="Menü öffnen" aria-expanded="false">MV</button>
+      <div class="brand-text">
+        <div>MatchVote</div>
+        <small>Administration</small>
+      </div>
+    </div>
+    <div class="pill mv-ml-auto">API-Basis: <strong id="apiBase">/api</strong></div>
+  </nav>
+
+  <div class="mv-drawer-overlay" id="mvDrawerOverlay"></div>
+  <aside class="mv-drawer" id="mvDrawer" aria-label="Navigation">
+    <div class="mv-drawer-header">
+      <div class="logo">MV</div>
+      <div>
+        <div class="mv-drawer-title">MatchVote</div>
+        <div class="mv-drawer-sub">Szenenbewertung</div>
+      </div>
+    </div>
+    <nav class="mv-drawer-nav">
+      <a href="index.html">Start</a>
+      <a href="ratings.html">Bewertungen</a>
+      <a href="roadmap.html">Roadmap</a>
+      <a href="admin.html" class="active">Admin</a>
+      <a href="user.html">Profil</a>
+      <a href="privacy.html">Datenschutz</a>
+      <a href="impressum.html">Impressum</a>
+      <a href="credits.html">Credits</a>
+      <a href="#" data-logout>Abmelden</a>
+    </nav>
+  </aside>
+
+  <div class="wrap">
+    <section class="grid mv-admin-hero">
+      <div class="card">
+        <h1>Administrationsbereich</h1>
+        <p>Erstelle Szenen während des Spiels, gib sie frei oder nimm sie zurück.</p>
+      </div>
+      <div class="card">
+        <div class="pill">Authentifizierung: <strong id="authState">unbekannt</strong></div>
+        <div class="mv-inline mv-gap-top">
+          <button class="secondary mv-auto" onclick="openLogin()">Admin-Anmeldung</button>
+          <button class="secondary mv-auto" onclick="logout()">Abmelden</button>
+        </div>
+        <div class="section-note mv-gap-top">
+          Admin-Endpunkte nutzen nur Bearer-JWT.
+        </div>
+      </div>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <h2>Szene erstellen</h2>
+
+        <div class="row">
+          <div>
+            <label>League filter</label>
+            <select id="matchLeagueFilter"></select>
+          </div>
+          <div>
+            <label>Spieltag</label>
+            <select id="matchWeekFilter"></select>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Team search</label>
+            <input id="matchSearch" placeholder="z.B. Dortmund oder Bayern" />
+          </div>
+          <div>
+            <label>Spiel</label>
+            <select id="matchSelect"></select>
+          </div>
+        </div>
+        <div class="section-note" id="matchInfo">Wähle ein Spiel, um eine Szene zu erstellen.</div>
+        <div class="row mv-gap-top">
+        <div class="section-note">
+          Ein Spiel nur löschen, wenn es keine Szenen hat.
+        </div>
+          <div class="mv-inline">
+            <button class="secondary mv-auto" onclick="deleteMatch()">Spiel löschen</button>
+            <div class="status" id="matchDeleteStatus"></div>
+          </div>
+        </div>
+
+        <div class="row3 mv-gap-top">
+          <div>
+            <label>Minute</label>
+            <input id="sceneMinute" type="number" min="0" max="130" value="0" />
+          </div>
+          <div>
+            <label>Stoppage</label>
+            <input id="sceneStoppage" type="number" min="0" max="30" placeholder="optional" />
+          </div>
+          <div>
+            <label>Type</label>
+            <select id="sceneType"></select>
+          </div>
+        </div>
+
+        <div class="mv-inline mv-gap-top">
+          <button class="secondary mv-auto" type="button" id="voiceStartBtn">Spracheingabe</button>
+          <button class="secondary mv-auto" type="button" id="voiceStopBtn" disabled>Stopp</button>
+          <div class="status" id="voiceStatus"></div>
+        </div>
+
+        <label id="sceneDescriptionDeLabel">Beschreibung (Deutsch)</label>
+        <textarea id="sceneDescriptionDe" placeholder="Beschreibung auf Deutsch..."></textarea>
+
+        <label id="sceneDescriptionEnLabel">Description (English)</label>
+        <textarea id="sceneDescriptionEn" placeholder="Description in English..."></textarea>
+
+        <div class="row mv-gap-top">
+          <div>
+          <label><input type="checkbox" id="sceneReleaseNow" /> Sofort freigeben</label>
+          </div>
+          <div class="mv-inline">
+            <button class="secondary mv-grow" onclick="refreshAll()">Refresh</button>
+          <button class="mv-grow" onclick="createScene()">Szene erstellen</button>
+          </div>
+        </div>
+
+        <div class="status" id="createStatus"></div>
+      </section>
+
+      <section class="card">
+        <h2>Szenenliste</h2>
+        <div class="row">
+          <div class="pill">Spiel: <strong id="currentMatchLabel">alle</strong></div>
+          <div class="pill">Szenen: <strong id="sceneCount">0</strong></div>
+        </div>
+        <div class="section-note mv-gap-top">
+          Freigeben und zurücknehmen sind POST-Bearer-Endpunkte.
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:220px;">Spiel</th>
+                <th>Szene</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:220px;">Aktionen</th>
+              </tr>
+            </thead>
+            <tbody id="sceneTable">
+              <tr><td colspan="4" class="section-note">Lädt...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="card mv-gap-top-lg">
+      <h2>Benutzerverwaltung</h2>
+      <div class="row">
+        <div>
+          <label>Suche</label>
+          <input id="userSearch" placeholder="E-Mail filtern" />
+        </div>
+        <div class="mv-inline-start">
+          <button class="secondary mv-auto" onclick="loadUsers()">Benutzer neu laden</button>
+          <div class="status" id="userStatus"></div>
+        </div>
+      </div>
+      <div class="section-note mv-gap-top">
+        Änderungen wirken sofort. Nutzer müssen sich ggf. erneut anmelden.
+      </div>
+
+      <div class="table-wrap">
+        <table>
+        <thead>
+          <tr>
+            <th>E-Mail</th>
+            <th style="width:90px;">Aktiv</th>
+            <th style="width:90px;">Admin</th>
+            <th style="width:110px;">Verifiziert</th>
+            <th style="width:140px;">Erstellt</th>
+            <th style="width:180px;">Aktion</th>
+          </tr>
+        </thead>
+        <tbody id="userTable">
+          <tr><td colspan="6" class="section-note">Lädt...</td></tr>
+        </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card mv-gap-top-lg">
+      <h2>OpenAPI Dev Token</h2>
+      <div class="section-note">
+        Kurzlebiger Zugriff nur für OpenAPI-Metadaten. Token ist an ein Admin-Konto gebunden.
+      </div>
+      <div class="row mv-gap-top">
+        <div>
+          <label>Admin-Konto auswählen</label>
+          <select id="openapiAdminSelect"></select>
+        </div>
+        <div class="mv-inline-start">
+          <button class="secondary mv-auto" id="openapiTokenBtn" type="button">Generate OpenAPI Dev Token</button>
+          <div class="status" id="openapiTokenStatus"></div>
+        </div>
+      </div>
+      <div class="section-note mv-gap-top">
+        Token ist für Entwicklung. Kein Passwort erforderlich.
+      </div>
+      <div class="mv-gap-top" id="openapiTokenOutput" style="display:none;">
+        <label>Token</label>
+        <textarea id="openapiTokenValue" readonly></textarea>
+        <div class="mv-gap-top">
+          <div><strong>Variable:</strong> <span id="openapiVarName"></span></div>
+          <div class="mv-gap-top-sm">Use this token as a Bearer token to access the OpenAPI schema.</div>
+          <div class="mv-gap-top-sm"><strong>Example:</strong> <span id="openapiExample"></span></div>
+          <div class="mv-gap-top-sm"><strong>Endpoint:</strong> https://matchvote.online/api/admin/openapi.json</div>
+          <div class="mv-gap-top-sm"><strong>Expires:</strong> <span id="openapiExpires"></span></div>
+        </div>
+        <div class="section-note mv-gap-top">
+          <div>• This token is for development only</div>
+          <div>• It grants read-only access to OpenAPI metadata</div>
+          <div>• It must NOT be embedded in production apps</div>
+          <div>• It expires automatically and cannot be refreshed</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <div class="footer-links">
+      <a href="impressum.html">Impressum</a>
+    </div>
+    &copy; MatchVote
+    <span class="muted">&middot;</span>
+    <a href="privacy.html">Datenschutz</a>
+    <span class="muted">&middot;</span>
+    <a href="credits.html">Credits</a>
+  </footer>
+
+<script>
+  function getAccessToken(){ return localStorage.getItem("mv_access_token") || ""; }
+  function requireLogin(){
+    const next = encodeURIComponent("admin.html");
+    location.replace(`/auth.html?next=${next}`);
+  }
+  function openLogin(){ requireLogin(); }
+  function getApiBase(){ return localStorage.getItem("mv_api_base") || "/api"; }
+  function normBase(v){
+    v = (v || "").trim();
+    if (!v) return "/api";
+    if (v.endsWith("/")) v = v.slice(0,-1);
+    return v;
+  }
+  function apiBase(){ return normBase(getApiBase()); }
+
+  (function guard(){
+    if (!getAccessToken()) requireLogin();
+  })();
+
+  function setStatus(elId, msg, cls="") {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.className = "status " + cls;
+    el.textContent = msg || "";
+  }
+
+  function updateAuthState() {
+    document.getElementById("apiBase").textContent = apiBase();
+    const token = getAccessToken();
+    const el = document.getElementById("authState");
+    el.textContent = token ? "JWT present" : "not logged in";
+    el.style.color = token ? "var(--accent-2)" : "var(--warn)";
+  }
+
+  function logout() {
+    localStorage.removeItem("mv_access_token");
+    updateAuthState();
+    requireLogin();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    }[m]));
+  }
+
+  function cleanLabel(s) {
+    return String(s ?? "")
+      .replace(/\uFFFD/g, "")
+      .replace(/[\u0000-\u001F\u007F]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  function getSceneTypeLabel(scene) {
+    if (!scene || typeof scene !== "object") return "";
+    return scene.scene_type_label || scene.scene_type || "";
+  }
+
+  function getPreferredLanguage() {
+    if (navigator.languages && navigator.languages.length) return navigator.languages[0];
+    return navigator.language || "en";
+  }
+
+  function isGerman() {
+    const lang = getPreferredLanguage().toLowerCase();
+    return lang.startsWith("de");
+  }
+
+  function getSceneDescription(scene) {
+    if (!scene || typeof scene !== "object") return "";
+    if (isGerman()) return scene.description_de || scene.description_en || scene.description || "";
+    return scene.description_en || scene.description_de || scene.description || "";
+  }
+
+  function initDescriptionFields() {
+    const deLabel = document.getElementById("sceneDescriptionDeLabel");
+    const enLabel = document.getElementById("sceneDescriptionEnLabel");
+    const deInput = document.getElementById("sceneDescriptionDe");
+    const enInput = document.getElementById("sceneDescriptionEn");
+    if (!deLabel || !enLabel || !deInput || !enInput) return;
+
+    if (isGerman()) {
+      deLabel.textContent = "Beschreibung (Deutsch)";
+      enLabel.textContent = "Beschreibung (Englisch)";
+      deInput.placeholder = "Beschreibung auf Deutsch...";
+      enInput.placeholder = "Beschreibung auf Englisch...";
+    } else {
+      deLabel.textContent = "Description (German)";
+      enLabel.textContent = "Description (English)";
+      deInput.placeholder = "Description in German...";
+      enInput.placeholder = "Description in English...";
+    }
+  }
+
+  async function apiFetch(path, options={}) {
+    const url = apiBase() + path;
+    const token = getAccessToken();
+    const headers = new Headers(options.headers || {});
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (!headers.has("Accept-Language")) headers.set("Accept-Language", getPreferredLanguage());
+    if (options.body && !headers.has("Content-Type")) headers.set("Content-Type","application/json");
+
+    const res = await fetch(url, { ...options, headers });
+    const txt = await res.text();
+    let data = null;
+    try { data = txt ? JSON.parse(txt) : null; } catch { data = txt; }
+
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem("mv_access_token");
+      updateAuthState();
+      requireLogin();
+      throw new Error("Nicht autorisiert");
+    }
+    if (!res.ok) {
+      const bodyMsg = (typeof data === "string" ? data : JSON.stringify(data));
+      throw new Error(`${res.status} ${res.statusText} - ${bodyMsg}`);
+    }
+    return { res, data, url };
+  }
+
+  async function apiUpload(path, formData) {
+    const url = apiBase() + path;
+    const token = getAccessToken();
+    const headers = new Headers();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (!headers.has("Accept-Language")) headers.set("Accept-Language", getPreferredLanguage());
+
+    const res = await fetch(url, { method: "POST", headers, body: formData });
+    const txt = await res.text();
+    let data = null;
+    try { data = txt ? JSON.parse(txt) : null; } catch { data = txt; }
+
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem("mv_access_token");
+      updateAuthState();
+      requireLogin();
+      throw new Error("Nicht autorisiert");
+    }
+    if (!res.ok) {
+      const bodyMsg = (typeof data === "string" ? data : JSON.stringify(data));
+      throw new Error(`${res.status} ${res.statusText} - ${bodyMsg}`);
+    }
+    return { res, data, url };
+  }
+
+  const matchCache = {};
+  const allMatches = [];
+  const userCache = [];
+  let voiceRecorder = null;
+  let voiceChunks = [];
+  let voiceStream = null;
+
+  function setVoiceButtons(recording) {
+    const startBtn = document.getElementById("voiceStartBtn");
+    const stopBtn = document.getElementById("voiceStopBtn");
+    if (startBtn) startBtn.disabled = recording;
+    if (stopBtn) stopBtn.disabled = !recording;
+  }
+
+  function applyVoiceDraft(draft) {
+    if (!draft || typeof draft !== "object") return;
+    const minuteEl = document.getElementById("sceneMinute");
+    const stoppageEl = document.getElementById("sceneStoppage");
+    const typeEl = document.getElementById("sceneType");
+    const descDe = document.getElementById("sceneDescriptionDe");
+    const descEn = document.getElementById("sceneDescriptionEn");
+
+    if (minuteEl && draft.minute !== null && draft.minute !== undefined) minuteEl.value = draft.minute;
+    if (stoppageEl && draft.stoppage_time !== null && draft.stoppage_time !== undefined) stoppageEl.value = draft.stoppage_time;
+    if (typeEl && draft.scene_type) typeEl.value = draft.scene_type;
+    if (descDe && draft.description_de) descDe.value = draft.description_de;
+    if (descEn && draft.description_en) descEn.value = draft.description_en;
+  }
+
+  async function sendVoiceDraft(blob) {
+    const formData = new FormData();
+    formData.append("audio", blob, "scene.webm");
+    formData.append("lang", getPreferredLanguage());
+
+    setStatus("voiceStatus", "Verarbeite Sprache...", "warn");
+    const r = await apiUpload("/admin/scenes/voice-draft", formData);
+    applyVoiceDraft(r.data);
+    const note = r.data && r.data.notes ? `Vorschlag erstellt. ${r.data.notes}` : "Vorschlag erstellt.";
+    setStatus("voiceStatus", note, r.data && r.data.notes ? "warn" : "ok");
+  }
+
+  async function startVoiceCapture() {
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      setStatus("voiceStatus", "Spracheingabe wird im Browser nicht unterstützt.", "err");
+      return;
+    }
+    if (voiceRecorder) return;
+
+    try {
+      voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceChunks = [];
+      voiceRecorder = new MediaRecorder(voiceStream);
+      voiceRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size) voiceChunks.push(e.data);
+      };
+      voiceRecorder.onstop = async () => {
+        if (voiceStream) {
+          voiceStream.getTracks().forEach(t => t.stop());
+          voiceStream = null;
+        }
+        const blob = new Blob(voiceChunks, { type: voiceRecorder.mimeType || "audio/webm" });
+        voiceRecorder = null;
+        voiceChunks = [];
+        try {
+          await sendVoiceDraft(blob);
+        } catch (e) {
+          setStatus("voiceStatus", "Fehler: " + e.message, "err");
+        }
+      };
+      voiceRecorder.start();
+      setVoiceButtons(true);
+      setStatus("voiceStatus", "Aufnahme läuft...", "warn");
+    } catch (e) {
+      setStatus("voiceStatus", "Mikrofonzugriff fehlgeschlagen.", "err");
+    }
+  }
+
+  function stopVoiceCapture() {
+    if (!voiceRecorder) return;
+    setVoiceButtons(false);
+    setStatus("voiceStatus", "Beende Aufnahme...", "warn");
+    voiceRecorder.stop();
+  }
+
+  function getMatchdayKey(match) {
+    if (!match || typeof match !== "object") return "";
+    const season = String(match.season || "");
+    const number = Number(match.matchday_number);
+    if (season && Number.isFinite(number) && number > 0) return `${season}|${number}`;
+    const name = match.matchday_name || match.matchday_name_en || "";
+    if (season && name) return `${season}|${name}`;
+    if (Number.isFinite(number) && number > 0) return `|${number}`;
+    if (name) return `|${name}`;
+    return "";
+  }
+
+  function matchdayKeyToSortValue(key) {
+    const parts = String(key || "").split("|");
+    const season = parts[0] || "";
+    const seasonStart = Number((season.match(/\d{4}/) || [0])[0]) || 0;
+    const number = Number(parts[1] || 0);
+    const numValue = Number.isFinite(number) && number > 0 ? number : 999;
+    return (seasonStart * 1000) + numValue;
+  }
+
+  function formatMatchdayLabelFromMatch(match) {
+    const lang = getPreferredLanguage().toLowerCase();
+    const season = String(match?.season || "").trim();
+    const number = Number(match?.matchday_number);
+    let label = "";
+    if (lang.startsWith("de")) {
+      label = match?.matchday_name || (Number.isFinite(number) && number > 0 ? `Spieltag ${number}` : "");
+    } else {
+      label = match?.matchday_name_en || (Number.isFinite(number) && number > 0 ? `Matchday ${number}` : "");
+    }
+    if (!label) label = lang.startsWith("de") ? "Spieltag unbekannt" : "Matchday unknown";
+    if (!season) return label;
+    const seasonPrefix = lang.startsWith("de") ? "Saison" : "Season";
+    const seasonShort = formatSeasonShort(season);
+    return `${seasonPrefix} ${seasonShort} - ${label}`;
+  }
+
+  function formatSeasonShort(season) {
+    const raw = String(season || "").trim();
+    if (!raw) return raw;
+    const years = raw.match(/\d{4}/g) || [];
+    if (years.length >= 2) {
+      const y1 = years[0];
+      const y2 = years[1];
+      return `${y1.slice(-2)}/${y2.slice(-2)}`;
+    }
+    if (years.length === 1) {
+      const y1 = Number(years[0]);
+      if (Number.isFinite(y1)) {
+        const y2 = y1 + 1;
+        return `${String(y1).slice(-2)}/${String(y2).slice(-2)}`;
+      }
+    }
+    const short = raw.match(/\b(\d{2})\s*\/\s*(\d{2})\b/);
+    if (short) return `${short[1]}/${short[2]}`;
+    return raw;
+  }
+
+  function formatMatchName(m) {
+    const d = m.match_date ? new Date(m.match_date).toLocaleString("de-DE") : "";
+    return `${m.team_home} vs ${m.team_away} ${d ? "(" + d + ")" : ""}`;
+  }
+
+  function setSelectOptions(sel, options, allLabel, selectedValue = "", labelFormatter = null) {
+    if (!sel) return;
+    sel.innerHTML = "";
+    const optAll = document.createElement("option");
+    optAll.value = "";
+    optAll.textContent = cleanLabel(allLabel);
+    sel.appendChild(optAll);
+    for (const v of options) {
+      const opt = document.createElement("option");
+      opt.value = v;
+      const label = labelFormatter ? labelFormatter(v) : v;
+      opt.textContent = cleanLabel(label);
+      sel.appendChild(opt);
+    }
+    if (selectedValue && options.includes(selectedValue)) sel.value = selectedValue;
+  }
+
+  function buildFilters(matches) {
+    const leagues = [...new Set(matches.map(m => m.league).filter(Boolean))].sort();
+    const matchdayLabelMap = {};
+    const matchdayKeys = [];
+    for (const m of matches) {
+      const key = getMatchdayKey(m);
+      if (!key) continue;
+      if (!matchdayLabelMap[key]) {
+        matchdayLabelMap[key] = formatMatchdayLabelFromMatch(m);
+        matchdayKeys.push(key);
+      }
+    }
+    const matchdays = matchdayKeys.sort((a, b) => matchdayKeyToSortValue(a) - matchdayKeyToSortValue(b));
+    setSelectOptions(document.getElementById("matchLeagueFilter"), leagues, "Alle Ligen");
+    setSelectOptions(
+      document.getElementById("matchWeekFilter"),
+      matchdays,
+      "Alle Spieltage",
+      "",
+      (key) => matchdayLabelMap[key] || key
+    );
+  }
+
+  function getFilteredMatches() {
+    const league = document.getElementById("matchLeagueFilter").value || "";
+    const week = document.getElementById("matchWeekFilter").value || "";
+    const q = (document.getElementById("matchSearch").value || "").toLowerCase();
+    const list = allMatches.filter(m => {
+      const leagueOk = !league || m.league === league;
+      const weekOk = !week || getMatchdayKey(m) === week;
+      const text = `${m.team_home} ${m.team_away}`.toLowerCase();
+      const searchOk = !q || text.includes(q);
+      return leagueOk && weekOk && searchOk;
+    });
+    list.sort((a, b) => new Date(a.match_date) - new Date(b.match_date));
+    return list;
+  }
+
+  function populateMatchSelect(matches) {
+    const sel = document.getElementById("matchSelect");
+    sel.innerHTML = "";
+    for (const m of matches) {
+      const opt = document.createElement("option");
+      opt.value = m.match_id;
+      opt.textContent = formatMatchName(m);
+      sel.appendChild(opt);
+    }
+  }
+
+  function updateMatchInfo() {
+    const id = document.getElementById("matchSelect").value || "";
+    const m = matchCache[id];
+    document.getElementById("currentMatchLabel").textContent = m ? `${m.team_home} gegen ${m.team_away}` : "alle";
+    document.getElementById("matchInfo").textContent = m
+      ? `${m.league} ${m.season}`
+      : "Wähle ein Spiel, um eine Szene zu erstellen.";
+  }
+
+  async function applyMatchFilters() {
+    const matches = getFilteredMatches();
+    populateMatchSelect(matches);
+    if (matches.length) {
+      document.getElementById("matchSelect").selectedIndex = 0;
+    }
+    updateMatchInfo();
+    await loadScenes();
+  }
+
+  async function loadMatches() {
+    setStatus("createStatus", "Spiele werden geladen...", "warn");
+    const r = await apiFetch("/matches?limit=500&offset=0");
+    const matches = Array.isArray(r.data) ? r.data : [];
+
+    allMatches.length = 0;
+    Object.keys(matchCache).forEach(k => delete matchCache[k]);
+    matches.forEach(m => {
+      matchCache[m.match_id] = m;
+      allMatches.push(m);
+    });
+
+    buildFilters(allMatches);
+    await applyMatchFilters();
+    setStatus("createStatus", `Spiele geladen: ${matches.length}`, "ok");
+  }
+
+  async function deleteMatch() {
+    const matchId = document.getElementById("matchSelect").value || "";
+    if (!matchId) return setStatus("matchDeleteStatus", "Bitte zuerst ein Spiel wählen.", "warn");
+    if (!confirm("Dieses Spiel löschen? Es darf keine Szenen haben.")) return;
+
+    setStatus("matchDeleteStatus", "Lösche...", "warn");
+    try {
+      await apiFetch(`/admin/matches/${encodeURIComponent(matchId)}`, { method: "DELETE" });
+      setStatus("matchDeleteStatus", "Spiel gelöscht.", "ok");
+      await loadMatches();
+    } catch (e) {
+      setStatus("matchDeleteStatus", "Fehler: " + e.message, "err");
+    }
+  }
+
+  function formatDateShort(value) {
+    if (!value) return "";
+    try { return new Date(value).toLocaleString("de-DE"); } catch { return String(value); }
+  }
+
+  function renderUsers() {
+    const tbody = document.getElementById("userTable");
+    const q = (document.getElementById("userSearch").value || "").toLowerCase();
+    const rows = userCache.filter(u => !q || String(u.email || "").toLowerCase().includes(q));
+
+    tbody.innerHTML = "";
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="6" class="section-note">Keine Benutzer gefunden.</td></tr>`;
+      return;
+    }
+
+    rows.forEach(u => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td data-label="E-Mail">${escapeHtml(u.email || "")}</td>
+        <td data-label="Aktiv"><input type="checkbox" data-user-id="${u.user_id}" data-field="is_active" ${u.is_active ? "checked" : ""}></td>
+        <td data-label="Admin"><input type="checkbox" data-user-id="${u.user_id}" data-field="is_admin" ${u.is_admin ? "checked" : ""}></td>
+        <td data-label="Verifiziert">${u.email_verified ? "yes" : "no"}</td>
+        <td data-label="Erstellt">${escapeHtml(formatDateShort(u.created_at))}</td>
+        <td data-label="Aktion">
+          <div class="mv-inline">
+            <button class="secondary mv-auto" data-save-user="${u.user_id}">Speichern</button>
+            <button class="secondary mv-auto" data-deactivate-user="${u.user_id}">Deaktivieren</button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll("button[data-save-user]").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const userId = e.target.dataset.saveUser;
+        const activeEl = tbody.querySelector(`input[data-user-id="${userId}"][data-field="is_active"]`);
+        const adminEl = tbody.querySelector(`input[data-user-id="${userId}"][data-field="is_admin"]`);
+        if (!activeEl || !adminEl) return;
+
+        const payload = {
+          is_active: activeEl.checked,
+          is_admin: adminEl.checked,
+        };
+
+        btn.disabled = true;
+        setStatus("userStatus", "Speichern...", "warn");
+        try {
+          const r = await apiFetch(`/admin/users/${encodeURIComponent(userId)}`, {
+            method: "PATCH",
+            body: JSON.stringify(payload),
+          });
+          const idx = userCache.findIndex(x => x.user_id === userId);
+          if (idx >= 0) userCache[idx] = r.data;
+          setStatus("userStatus", "Gespeichert.", "ok");
+        } catch (err) {
+          setStatus("userStatus", "Fehler: " + err.message, "err");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
+    tbody.querySelectorAll("button[data-deactivate-user]").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        const userId = e.target.dataset.deactivateUser;
+        const activeEl = tbody.querySelector(`input[data-user-id="${userId}"][data-field="is_active"]`);
+        if (!activeEl) return;
+
+        btn.disabled = true;
+        setStatus("userStatus", "Deaktiviere...", "warn");
+        try {
+          const r = await apiFetch(`/admin/users/${encodeURIComponent(userId)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ is_active: false }),
+          });
+          const idx = userCache.findIndex(x => x.user_id === userId);
+          if (idx >= 0) userCache[idx] = r.data;
+          activeEl.checked = false;
+          setStatus("userStatus", "Benutzer deaktiviert.", "ok");
+        } catch (err) {
+          setStatus("userStatus", "Fehler: " + err.message, "err");
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+
+    populateOpenApiAdmins();
+  }
+
+  async function loadUsers() {
+    setStatus("userStatus", "Benutzer werden geladen...", "warn");
+    try {
+      const r = await apiFetch("/admin/users?limit=500&offset=0");
+      userCache.length = 0;
+      if (Array.isArray(r.data)) userCache.push(...r.data);
+      renderUsers();
+      setStatus("userStatus", `Benutzer geladen: ${userCache.length}`, "ok");
+    } catch (e) {
+      setStatus("userStatus", "Fehler: " + e.message, "err");
+    }
+  }
+
+  function sanitizeVarName(email) {
+    const local = String(email || "").split("@")[0] || "admin";
+    return local.replace(/[^a-zA-Z0-9_]/g, "_");
+  }
+
+  function populateOpenApiAdmins() {
+    const sel = document.getElementById("openapiAdminSelect");
+    if (!sel) return;
+    sel.innerHTML = "";
+    const admins = userCache.filter(u => u.is_admin && u.is_active);
+    if (!admins.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "Keine aktiven Admins gefunden";
+      sel.appendChild(opt);
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    admins.forEach(u => {
+      const opt = document.createElement("option");
+      opt.value = u.user_id;
+      opt.textContent = u.email || u.user_id;
+      opt.dataset.email = u.email || "";
+      sel.appendChild(opt);
+    });
+  }
+
+  async function generateOpenApiToken() {
+    const sel = document.getElementById("openapiAdminSelect");
+    const out = document.getElementById("openapiTokenOutput");
+    const statusEl = document.getElementById("openapiTokenStatus");
+    if (!sel || !out) return;
+    const userId = sel.value;
+    const email = sel.selectedOptions[0]?.dataset?.email || sel.selectedOptions[0]?.textContent || "";
+    if (!userId) {
+      setStatus("openapiTokenStatus", "Bitte Admin-Konto wählen.", "warn");
+      return;
+    }
+    setStatus("openapiTokenStatus", "Token wird erstellt...", "warn");
+    try {
+      const r = await apiFetch("/admin/dev-token", {
+        method: "POST",
+        body: JSON.stringify({ user_id: userId })
+      });
+      const token = r.data?.access_token || "";
+      const expiresAt = r.data?.expires_at || "";
+      const varName = sanitizeVarName(email);
+      document.getElementById("openapiTokenValue").value = token;
+      document.getElementById("openapiVarName").textContent = `$${varName}`;
+      document.getElementById("openapiExample").textContent = `Authorization: Bearer $${varName}`;
+      document.getElementById("openapiExpires").textContent = expiresAt;
+      out.style.display = "block";
+      setStatus("openapiTokenStatus", "Token erstellt.", "ok");
+    } catch (e) {
+      setStatus("openapiTokenStatus", "Fehler: " + e.message, "err");
+    }
+  }
+
+  const SCENE_TYPES = [
+    "PENALTY","PENALTY_REVIEW","PENALTY_OVERTURNED","FREE_KICK","INDIRECT_FREE_KICK","DROP_BALL",
+    "FOUL","YELLOW_CARD","SECOND_YELLOW","RED_CARD",
+    "OFFSIDE","OFFSIDE_GOAL","GOAL_DISALLOWED","VAR_REVIEW","VAR_DECISION",
+    "HANDBALL","DENIED_GOALSCORING_OPPORTUNITY",
+    "SUBSTITUTION","INJURY_STOPPAGE","TIME_WASTING","DISSENT",
+    "CORNER","GOAL_KICK","THROW_IN","OTHER"
+  ];
+  const SCENE_TYPE_LABELS_DE = {
+    "PENALTY":"Elfmeter",
+    "PENALTY_REVIEW":"Elfmeter-Check",
+    "PENALTY_OVERTURNED":"Elfmeter zurückgenommen",
+    "FREE_KICK":"Freistoß",
+    "INDIRECT_FREE_KICK":"Indirekter Freistoß",
+    "DROP_BALL":"Schiedsrichterball",
+    "FOUL":"Foul",
+    "YELLOW_CARD":"Gelbe Karte",
+    "SECOND_YELLOW":"Zweite Gelbe",
+    "RED_CARD":"Rote Karte",
+    "OFFSIDE":"Abseits",
+    "GOAL":"Tor",
+    "OFFSIDE_GOAL":"Tor im Abseits",
+    "GOAL_DISALLOWED":"Tor aberkannt",
+    "VAR_REVIEW":"VAR-Check",
+    "VAR_DECISION":"VAR-Entscheidung",
+    "HANDBALL":"Handspiel",
+    "DENIED_GOALSCORING_OPPORTUNITY":"Notbremse (DOGSO)",
+    "SUBSTITUTION":"Wechsel",
+    "INJURY_STOPPAGE":"Verletzungspause",
+    "TIME_WASTING":"Zeitspiel",
+    "DISSENT":"Unsportliches Verhalten",
+    "CORNER":"Ecke",
+    "GOAL_KICK":"Abstoß",
+    "THROW_IN":"Einwurf",
+    "OTHER":"Sonstiges"
+  };
+  function getSceneTypeOptionLabel(value) {
+    const lang = getPreferredLanguage();
+    if (lang && lang.toLowerCase().startsWith("de")) {
+      return SCENE_TYPE_LABELS_DE[value] || value;
+    }
+    return value;
+  }
+
+  function populateSceneTypes() {
+    const sel = document.getElementById("sceneType");
+    sel.innerHTML = "";
+    for (const t of SCENE_TYPES) {
+      const opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = getSceneTypeOptionLabel(t);
+      sel.appendChild(opt);
+    }
+    sel.value = "OTHER";
+  }
+
+  async function createScene() {
+    try {
+      const match_id = document.getElementById("matchSelect").value;
+      const minute = Number(document.getElementById("sceneMinute").value);
+      const stoppageRaw = document.getElementById("sceneStoppage").value.trim();
+      const scene_type = document.getElementById("sceneType").value;
+      const descriptionDe = document.getElementById("sceneDescriptionDe").value.trim();
+      const descriptionEn = document.getElementById("sceneDescriptionEn").value.trim();
+      const releaseNow = document.getElementById("sceneReleaseNow").checked;
+
+      if (!match_id) throw new Error("Bitte zuerst ein Spiel wählen.");
+      if (!Number.isFinite(minute) || minute < 0 || minute > 130) throw new Error("Minute muss zwischen 0 und 130 liegen.");
+      if (!descriptionDe || descriptionDe.length < 3) throw new Error("Beschreibung (Deutsch) ist zu kurz.");
+      if (!descriptionEn || descriptionEn.length < 3) throw new Error("Beschreibung (Englisch) ist zu kurz.");
+
+      const payload = {
+        match_id,
+        minute,
+        scene_type,
+        description_de: descriptionDe,
+        description_en: descriptionEn,
+        is_released: releaseNow,
+        release_time: releaseNow ? new Date().toISOString() : null
+      };
+
+      if (stoppageRaw) payload.stoppage_time = Number(stoppageRaw);
+
+      setStatus("createStatus", "Szene wird erstellt...", "warn");
+      await apiFetch("/scenes", { method: "POST", body: JSON.stringify(payload) });
+      setStatus("createStatus", "Szene erstellt.", "ok");
+      document.getElementById("sceneDescriptionDe").value = "";
+      document.getElementById("sceneDescriptionEn").value = "";
+      await loadScenes();
+    } catch (e) {
+      setStatus("createStatus", "Fehler: " + e.message, "err");
+    }
+  }
+
+  async function loadScenes() {
+    const matchId = document.getElementById("matchSelect").value || "";
+    updateMatchInfo();
+    const path = matchId
+      ? `/scenes?match_id=${encodeURIComponent(matchId)}&limit=200&offset=0`
+      : "/scenes?limit=200&offset=0";
+
+    const r = await apiFetch(path);
+    const scenes = Array.isArray(r.data) ? r.data : [];
+    const visibleScenes = scenes.filter(s => s.scene_type !== "GOAL");
+    document.getElementById("sceneCount").textContent = String(visibleScenes.length);
+
+    const tbody = document.getElementById("sceneTable");
+    tbody.innerHTML = "";
+    if (!visibleScenes.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="section-note">Keine Szenen gefunden.</td></tr>`;
+      return;
+    }
+
+    visibleScenes.forEach(scene => {
+      const m = matchCache[scene.match_id];
+      const matchName = m ? `${m.team_home} gegen ${m.team_away}` : "Unbekanntes Spiel";
+      const statusText = scene.is_released ? "freigegeben" : "nicht freigegeben";
+      const statusClass = scene.is_released ? "status ok" : "status warn";
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td data-label="Spiel">${escapeHtml(matchName)}</td>
+        <td data-label="Szene">
+          <div><strong>${escapeHtml(getSceneTypeLabel(scene))}</strong></div>
+          <div>${escapeHtml(getSceneDescription(scene) || "")}</div>
+          <div class="section-note">Minute: ${scene.minute ?? ""}${scene.stoppage_time ? ("+" + scene.stoppage_time) : ""}</div>
+        </td>
+        <td data-label="Status" class="${statusClass}">${statusText}</td>
+        <td data-label="Aktionen">
+          <div class="mv-inline">
+            <button class="secondary mv-auto" onclick="adminRelease('${scene.scene_id}')">Freigeben</button>
+            <button class="secondary mv-auto" onclick="adminUnrelease('${scene.scene_id}')">Zurücknehmen</button>
+            <button class="secondary mv-auto" onclick="adminDeleteScene('${scene.scene_id}')">Löschen</button>
+          </div>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  async function adminRelease(sceneId) {
+    try {
+      setStatus("createStatus", "Szene wird freigegeben...", "warn");
+      await apiFetch(`/admin/scenes/${encodeURIComponent(sceneId)}/release`, { method: "POST" });
+      setStatus("createStatus", "Szene freigegeben.", "ok");
+      await loadScenes();
+    } catch (e) {
+      setStatus("createStatus", "Fehler: " + e.message, "err");
+    }
+  }
+
+  async function adminUnrelease(sceneId) {
+    try {
+      setStatus("createStatus", "Freigabe wird zurückgenommen...", "warn");
+      await apiFetch(`/admin/scenes/${encodeURIComponent(sceneId)}/unrelease`, { method: "POST" });
+      setStatus("createStatus", "Freigabe zurückgenommen.", "ok");
+      await loadScenes();
+    } catch (e) {
+      setStatus("createStatus", "Fehler: " + e.message, "err");
+    }
+  }
+
+  async function adminDeleteScene(sceneId) {
+    if (!confirm("Diese Szene löschen? Das kann nicht rückgängig gemacht werden.")) return;
+    try {
+      setStatus("createStatus", "Szene wird gelöscht...", "warn");
+      await apiFetch(`/admin/scenes/${encodeURIComponent(sceneId)}/delete`, { method: "POST" });
+      setStatus("createStatus", "Szene gelöscht.", "ok");
+      await loadScenes();
+    } catch (e) {
+      setStatus("createStatus", "Fehler: " + e.message, "err");
+    }
+  }
+
+  async function refreshAll() {
+    updateAuthState();
+    await loadMatches();
+  }
+
+  document.getElementById("matchSelect").addEventListener("change", loadScenes);
+  document.getElementById("matchLeagueFilter").addEventListener("change", applyMatchFilters);
+  document.getElementById("matchWeekFilter").addEventListener("change", applyMatchFilters);
+  document.getElementById("matchSearch").addEventListener("input", applyMatchFilters);
+  document.getElementById("userSearch").addEventListener("input", renderUsers);
+  const voiceStartBtn = document.getElementById("voiceStartBtn");
+  const voiceStopBtn = document.getElementById("voiceStopBtn");
+  if (voiceStartBtn) voiceStartBtn.addEventListener("click", startVoiceCapture);
+  if (voiceStopBtn) voiceStopBtn.addEventListener("click", stopVoiceCapture);
+  const openapiBtn = document.getElementById("openapiTokenBtn");
+  if (openapiBtn) openapiBtn.addEventListener("click", generateOpenApiToken);
+
+  updateAuthState();
+  setStatus("voiceStatus", "");
+  populateSceneTypes();
+  initDescriptionFields();
+  loadMatches();
+  loadUsers();
+</script>
+  <script src="/app-nav.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,158 @@
+﻿<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="MatchVote - kollektive, strukturierte Bewertung spielentscheidender Szenen." />
+  <title>MatchVote</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#0b0d12">
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/mv-ui.css">
+</head>
+
+<body class="mv-page mv-landing mv-theme-violet">
+    <header class="topbar mv-topbar">
+        <div class="brand">
+          <button class="logo mv-menu-toggle mv-icon-btn mv-icon-btn--md" id="mvMenuToggle" type="button" aria-label="Menü öffnen" aria-expanded="false">MV</button>
+          <div class="brand-text">
+            <div class="mv-brand-title">MatchVote</div>
+            <small>Community Preview</small>
+          </div>
+        </div>
+        <div class="nav-user mv-top-actions">
+          <a class="mv-icon-btn mv-icon-btn--md" href="ratings.html" title="Bewertungen" aria-label="Bewertungen">GO</a>
+        </div>
+      </header>
+
+  <div class="mv-drawer-overlay" id="mvDrawerOverlay"></div>
+    <aside class="mv-drawer" id="mvDrawer" aria-label="Navigation">
+      <div class="mv-drawer-header">
+        <div class="logo">MV</div>
+        <div>
+          <div class="mv-drawer-title">MatchVote</div>
+          <div class="mv-drawer-sub">Szenenbewertung</div>
+        </div>
+      </div>
+      <nav class="mv-drawer-nav">
+        <a href="index.html" class="active">Start</a>
+        <a href="ratings.html">Bewertungen</a>
+        <a href="roadmap.html">Roadmap</a>
+        <a href="admin.html">Admin</a>
+        <a href="user.html">Profil</a>
+        <a href="privacy.html">Datenschutz</a>
+        <a href="impressum.html">Impressum</a>
+        <a href="credits.html">Credits</a>
+        <a href="#" data-logout>Abmelden</a>
+      </nav>
+    </aside>
+
+  <div class="wrap">
+    <section class="card">
+      <div class="content mv-hero">
+        <div>
+          <h2>Kollektive Wahrnehmung<br/>statt lauter Einzelmeinung.</h2>
+          <p>
+            MatchVote erfasst spielentscheidende Szenen im Profifu&szlig;ball zeitlich korrekt und l&auml;sst Zuschauer
+            strukturiert bewerten - ohne Kommentare, ohne Tribunale, nur als aggregierte Datengrundlage.
+          </p>
+          <p>
+            MVP im Aufbau. Fokus: Stabilit&auml;t, Nachvollziehbarkeit und Deeskalation.
+          </p>
+
+          <div class="actions">
+            <a class="mv-btn mv-btn--primary mv-btn--md" href="ratings.html">Bewertungen</a>
+                        <a class="mv-btn mv-btn--outline mv-btn--md" href="/auth.html">Login / Registrierung</a>
+            <a class="mv-btn mv-btn--outline mv-btn--md" href="/api/docs">API Docs</a>
+            <a class="mv-btn mv-btn--outline mv-btn--md" href="mailto:info@matchvote.de">Kontakt: info@matchvote.de</a>
+          </div>
+          <aside class="meta mv-gap-top-lg">
+            <h3>Kontakt</h3>
+            <div class="kv">
+              <div class="k">E-Mail</div>
+              <div class="v"><a href="mailto:info@matchvote.de">info@matchvote.de</a></div>
+
+              <div class="k">Status</div>
+              <div class="v">MVP - in Entwicklung</div>
+
+              <div class="k">Zugang</div>
+              <a class="mv-btn mv-btn--primary mv-btn--md" href="ratings.html">Bewertungen</a>
+            </div>
+          </aside>
+        </div>
+
+        <aside class="mv-app-aside">
+          <div class="mv-app-promo">
+            <a class="mv-app-shot mv-card-btn" href="https://apps.apple.com/us/app/matchvote/id6757586494" target="_blank" rel="noopener">
+              <img src="/logo/iOS_Screenshot.jpg" alt="MatchVote iOS App Screenshot" loading="lazy" />
+            </a>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="card mv-gap-top-lg">
+      <div class="section-title">
+        <h2>Roadmap</h2>
+        <p>Fokus, Ausbau, Kontinuität.</p>
+      </div>
+      <div class="details-grid">
+        <div class="detail-card">
+          <div class="detail-title">Jetzt</div>
+          <div>Nur Spiele von Arminia Bielefeld.</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-title">Zukunft</div>
+          <div>Mehr Teams.</div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-title">Immer</div>
+          <div>Coding.</div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="footer-links">
+        <a href="impressum.html">Impressum</a>
+      </div>
+      &copy; <span id="y"></span> MatchVote
+      <span class="muted">&middot;</span>
+      <a href="privacy.html">Datenschutz</a>
+      <span class="muted">&middot;</span>
+      <a href="credits.html">Credits</a>
+    </footer>
+  </div>
+
+  <script>
+    document.getElementById("y").textContent = new Date().getFullYear();
+  </script>
+  <script src="/app-nav.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

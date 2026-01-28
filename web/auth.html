@@ -1,0 +1,252 @@
+﻿<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MatchVote &middot; Login</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/mv-ui.css">
+</head>
+<body class="mv-page mv-auth mv-theme-violet">
+    <header class="mv-topbar">
+    <div class="brand">
+      <div class="logo">MV</div>
+      <div class="brand-text">
+        <div>MatchVote</div>
+        <small>Login / Registrierung</small>
+      </div>
+    </div>
+    <div class="pill mv-ml-auto">API Base: <span id="apiBasePill">/api</span></div>
+  </header>
+
+  <main class="mv-content mv-center">
+    <section class="card">
+      <h2 class="mv-card-title">Login</h2>
+      <div class="row">
+        <div>
+          <label>E-Mail</label>
+          <input id="loginEmail" type="email" placeholder="name@domain.de" />
+        </div>
+        <div>
+          <label>Passwort</label>
+          <input id="loginPass" type="password" placeholder="********" />
+        </div>
+      </div>
+      <div class="row mv-gap-top">
+        <div><button onclick="login()">Einloggen</button></div>
+        <div class="muted mv-align-center">Weiterleitung: <span id="nextInfo"></span></div>
+      </div>
+
+      <div class="hr"></div>
+
+      <h2 class="mv-card-title">Registrierung</h2>
+      <div class="row">
+        <div>
+          <label>E-Mail</label>
+          <input id="regEmail" type="email" placeholder="name@domain.de" />
+        </div>
+        <div>
+          <label>Passwort</label>
+          <input id="regPass" type="password" placeholder="mind. 8 Zeichen" />
+        </div>
+      </div>
+      <div class="mv-gap-top">
+        <button onclick="register()">Registrieren</button>
+</div>
+
+      <label class="mv-gap-top-lg">Response</label>
+      <pre id="out" class="muted"></pre>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-links">
+      <a href="impressum.html">Impressum</a>
+    </div>
+    &copy; MatchVote
+    <span class="muted">&middot;</span>
+    <a href="privacy.html">Datenschutz</a>
+    <span class="muted">&middot;</span>
+    <a href="credits.html">Credits</a>
+  </footer>
+
+<script>
+  // =========================
+  // MatchVote Auth &middot; Register/Login
+  // =========================
+
+  function log(obj){
+    const el = document.getElementById("out");
+    el.textContent = (typeof obj === "string") ? obj : JSON.stringify(obj, null, 2);
+  }
+
+  function getApiBase(){
+    // Wenn nichts gesetzt ist: Default /api (passt zu deinem Nginx rewrite)
+    return localStorage.getItem("mv_api_base") || "/api";
+  }
+
+  function normBase(v){
+    v = (v || "").trim();
+    if(!v) return "/api";
+    if(v.endsWith("/")) v = v.slice(0, -1);
+    // Ensure leading slash for relative bases like "api"
+    if (!v.startsWith("/") && !v.startsWith("http://") && !v.startsWith("https://")) {
+      v = "/" + v;
+    }
+    return v;
+  }
+
+  const API_BASE = normBase(getApiBase());
+  document.getElementById("apiBasePill").textContent = API_BASE;
+
+  const params = new URLSearchParams(location.search);
+  const next = params.get("next") || "ratings.html";
+  document.getElementById("nextInfo").textContent = next;
+
+  function getAccessToken(){ return localStorage.getItem("mv_access_token") || ""; }
+  function decodeJwtPayload(token) {
+    if (!token) return null;
+    const part = token.split(".")[1];
+    if (!part) return null;
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "===".slice((normalized.length + 3) % 4);
+    try { return JSON.parse(atob(padded)); } catch { return null; }
+  }
+  function isTokenValid(token) {
+    const payload = decodeJwtPayload(token);
+    if (!payload || !payload.exp) return false;
+    return (payload.exp * 1000) > Date.now();
+  }
+
+  (function redirectIfLoggedIn() {
+    const token = getAccessToken();
+    if (!token) return;
+    if (isTokenValid(token)) {
+      location.replace(next);
+      return;
+    }
+    localStorage.removeItem("mv_access_token");
+  })();
+
+  async function apiFetch(path, options = {}) {
+    const url = API_BASE + path;
+
+    const headers = new Headers(options.headers || {});
+    if (options.body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+
+    let res;
+    let txt = "";
+    let data = null;
+
+    try {
+      res = await fetch(url, { ...options, headers });
+      txt = await res.text();
+      try { data = txt ? JSON.parse(txt) : null; } catch { data = txt; }
+      return { url, res, data };
+    } catch (e) {
+      // Netzwerk / CORS / DNS / etc.
+      return { url, res: { ok:false, status: 0, statusText: "FETCH_ERROR" }, data: String(e) };
+    }
+  }
+
+  async function register(){
+    const email = document.getElementById("regEmail").value.trim();
+    const password = document.getElementById("regPass").value;
+    if(!email || !password) return log("Bitte E-Mail und Passwort eingeben.");
+
+    const r = await apiFetch("/auth/register", {
+      method:"POST",
+      body: JSON.stringify({ email, password })
+    });
+
+    log({ url: r.url, status: r.res.status, ok: !!r.res.ok, data: r.data });
+    if (r.res.ok) {
+      localStorage.setItem("mv_last_login_email", email);
+    }
+  }
+
+  async function login(){
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPass").value;
+    if(!email || !password) return log("Bitte E-Mail und Passwort eingeben.");
+
+    const r = await apiFetch("/auth/login", {
+      method:"POST",
+      body: JSON.stringify({ email, password })
+    });
+
+    log({ url: r.url, status: r.res.status, ok: !!r.res.ok, data: r.data });
+
+    const tok = (r.data && typeof r.data === "object") ? (r.data.access_token || r.data.token) : null;
+
+    if(r.res.ok && tok){
+      localStorage.setItem("mv_access_token", tok);
+      localStorage.setItem("mv_last_login_email", email);
+
+      // Base festnageln
+      localStorage.setItem("mv_api_base", "/api");
+
+      // Zielseite
+      location.replace(next);
+      return;
+    }
+
+    log("Login fehlgeschlagen: kein access_token in Response oder HTTP != 200.");
+  }
+
+  function wireLoginEnter() {
+    const email = document.getElementById("loginEmail");
+    const pass = document.getElementById("loginPass");
+    if (!email || !pass) return;
+    [email, pass].forEach((el) => {
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          login();
+        }
+      });
+    });
+  }
+
+  function wireRegisterEnter() {
+    const email = document.getElementById("regEmail");
+    const pass = document.getElementById("regPass");
+    if (!email || !pass) return;
+    [email, pass].forEach((el) => {
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          register();
+        }
+      });
+    });
+  }
+
+  wireLoginEnter();
+  wireRegisterEnter();
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

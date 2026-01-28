@@ -1,0 +1,5 @@
+Contact: mailto:info@matchvote.de
+Preferred-Languages: de, en
+Policy: https://matchvote.de/
+Acknowledgments: https://matchvote.de/
+Expires: 2026-12-31T23:59:59Z
