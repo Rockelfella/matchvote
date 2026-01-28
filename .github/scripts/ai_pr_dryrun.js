@@ -36,6 +36,15 @@ const body = [
 ].join("\n");
 
 try {
+  const existing = sh(
+    `gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number' || true`
+  );
+  if (existing) {
+    fs.appendFileSync(githubEnv, `PR_NUMBER=${existing}\n`, "utf8");
+    console.log(`PR already exists: #${existing}`);
+    process.exit(0);
+  }
+
   sh(`git config user.name "github-actions[bot]"`);
   sh(`git config user.email "41898282+github-actions[bot]@users.noreply.github.com"`);
 
@@ -64,15 +73,6 @@ EOF'`);
     sh(`git push -u origin ${branch} --force`);
   } else {
     sh(`git push -u origin ${branch} --force`);
-  }
-
-  const existing = sh(
-    `gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number' || true`
-  );
-  if (existing) {
-    fs.appendFileSync(githubEnv, `PR_NUMBER=${existing}\n`, "utf8");
-    console.log(`PR already exists: #${existing}`);
-    process.exit(0);
   }
 
   const created = sh(
