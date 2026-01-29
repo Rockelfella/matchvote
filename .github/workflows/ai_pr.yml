@@ -9,20 +9,15 @@ on:
         description: "Command to run"
         required: true
         default: "/ai"
-        type: choice
-        options:
-          - "/ai"
-          - "/ai apply"
       issue_number:
         description: "Issue number to operate on"
         required: true
         default: ""
         type: string
-      confirm:
+      confirm_manual_run:
         description: "Confirm manual run"
         required: true
-        default: false
-        type: boolean
+        default: "true"
 
 permissions:
   contents: write
@@ -41,7 +36,7 @@ jobs:
         env:
           COMMAND_RAW: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
           ISSUE_NUMBER_INPUT: ${{ inputs.issue_number }}
-          CONFIRM_INPUT: ${{ inputs.confirm }}
+          CONFIRM_INPUT: ${{ inputs.confirm_manual_run }}
         run: |
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
@@ -145,7 +140,7 @@ jobs:
         env:
           COMMAND_RAW: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
           ISSUE_NUMBER_INPUT: ${{ inputs.issue_number }}
-          CONFIRM_INPUT: ${{ inputs.confirm }}
+          CONFIRM_INPUT: ${{ inputs.confirm_manual_run }}
         run: |
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
