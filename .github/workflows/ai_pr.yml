@@ -75,6 +75,64 @@ jobs:
           ACTOR: ${{ github.actor }}
           COMMENT_BODY: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
         run: node .github/scripts/ai_pr_dryrun.js
+      - name: Create AI run proof
+        if: ${{ always() }}
+        env:
+          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ai_proof
+          git fetch --depth=1 origin main || true
+          BASE_REF="$(git merge-base HEAD origin/main 2>/dev/null || true)"
+          if [ -n "$BASE_REF" ]; then
+            git diff --name-only "$BASE_REF"...HEAD > .ai_proof/changed_files.txt || true
+            git diff "$BASE_REF"...HEAD > .ai_proof/diff.patch || true
+          else
+            git diff --name-only origin/main...HEAD > .ai_proof/changed_files.txt || true
+            git diff origin/main...HEAD > .ai_proof/diff.patch || true
+          fi
+          if [ ! -s .ai_proof/diff.patch ]; then
+            : > .ai_proof/diff.patch
+          fi
+          {
+            echo "git status:"
+            git status -sb || true
+            echo ""
+            echo "git rev-parse HEAD:"
+            git rev-parse HEAD || true
+            echo ""
+            echo "note: see job logs for full output"
+          } > .ai_proof/logs.txt
+          NOW_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          cat > .ai_proof/run.json <<EOF
+          {
+            "repo": "${GITHUB_REPOSITORY}",
+            "workflow": "${GITHUB_WORKFLOW}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "attempt": "${GITHUB_RUN_ATTEMPT}",
+            "actor": "${GITHUB_ACTOR}",
+            "issue_number": "${ISSUE_NUMBER:-}",
+            "ref": "${GITHUB_REF}",
+            "sha": "${GITHUB_SHA}",
+            "timestamp": "${NOW_UTC}"
+          }
+          EOF
+          ARTIFACT_NAME="ai-run-proof"
+          ISSUE_DISPLAY="${ISSUE_NUMBER:-n/a}"
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "issue_number: ${ISSUE_DISPLAY}"
+            echo "branch/ref: ${GITHUB_REF}"
+            echo "commit SHA: ${GITHUB_SHA}"
+            echo "artifact: ${ARTIFACT_NAME}"
+            echo "run URL: ${RUN_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload AI run proof
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-run-proof
+          path: .ai_proof/
 
   ai_apply_pr:
     if: github.event_name == 'issue_comment' || github.event_name == 'workflow_dispatch'
@@ -133,3 +191,61 @@ jobs:
           set -euo pipefail
           mkdir -p .ai
           node .github/scripts/ai_pr_apply.js 2>&1 | tee .ai/apply.log
+      - name: Create AI run proof
+        if: ${{ always() }}
+        env:
+          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ai_proof
+          git fetch --depth=1 origin main || true
+          BASE_REF="$(git merge-base HEAD origin/main 2>/dev/null || true)"
+          if [ -n "$BASE_REF" ]; then
+            git diff --name-only "$BASE_REF"...HEAD > .ai_proof/changed_files.txt || true
+            git diff "$BASE_REF"...HEAD > .ai_proof/diff.patch || true
+          else
+            git diff --name-only origin/main...HEAD > .ai_proof/changed_files.txt || true
+            git diff origin/main...HEAD > .ai_proof/diff.patch || true
+          fi
+          if [ ! -s .ai_proof/diff.patch ]; then
+            : > .ai_proof/diff.patch
+          fi
+          {
+            echo "git status:"
+            git status -sb || true
+            echo ""
+            echo "git rev-parse HEAD:"
+            git rev-parse HEAD || true
+            echo ""
+            echo "note: see job logs for full output"
+          } > .ai_proof/logs.txt
+          NOW_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          cat > .ai_proof/run.json <<EOF
+          {
+            "repo": "${GITHUB_REPOSITORY}",
+            "workflow": "${GITHUB_WORKFLOW}",
+            "run_id": "${GITHUB_RUN_ID}",
+            "attempt": "${GITHUB_RUN_ATTEMPT}",
+            "actor": "${GITHUB_ACTOR}",
+            "issue_number": "${ISSUE_NUMBER:-}",
+            "ref": "${GITHUB_REF}",
+            "sha": "${GITHUB_SHA}",
+            "timestamp": "${NOW_UTC}"
+          }
+          EOF
+          ARTIFACT_NAME="ai-run-proof"
+          ISSUE_DISPLAY="${ISSUE_NUMBER:-n/a}"
+          RUN_URL="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "issue_number: ${ISSUE_DISPLAY}"
+            echo "branch/ref: ${GITHUB_REF}"
+            echo "commit SHA: ${GITHUB_SHA}"
+            echo "artifact: ${ARTIFACT_NAME}"
+            echo "run URL: ${RUN_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload AI run proof
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-run-proof
+          path: .ai_proof/
