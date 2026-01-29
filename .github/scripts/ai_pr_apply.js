@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Apply: generate AI patch, apply, commit, and update draft PR.
+ * Apply: generate AI JSON, write allowlisted files, commit, and update draft PR.
  */
 const { execSync } = require("node:child_process");
 const fs = require("node:fs");
+const path = require("node:path");
 const https = require("node:https");
 
 function sh(cmd) {
@@ -57,7 +58,7 @@ function httpJson(url, headers, body) {
   });
 }
 
-function extractDiffText(responseJson) {
+function extractJsonText(responseJson) {
   if (responseJson && typeof responseJson.output_text === "string") {
     return responseJson.output_text.trim();
   }
@@ -74,69 +75,61 @@ function extractDiffText(responseJson) {
   return "";
 }
 
-function extractUnifiedDiff(rawText) {
-  if (!rawText) return "";
-  const cleaned = rawText.replace(/```diff\s*/g, "").replace(/```\s*/g, "");
-  const idx = cleaned.indexOf("diff --git ");
-  if (idx === -1) return "";
-  return cleaned.slice(idx).trim();
-}
-
-function isProbablyValidDiff(diffText) {
-  if (!diffText) return false;
-  const lines = diffText.split(/\r?\n/);
-  const hasDiff = lines.some((l) => l.startsWith("diff --git "));
-  const hasMinus = lines.some((l) => l.startsWith("--- "));
-  const hasPlus = lines.some((l) => l.startsWith("+++ "));
-  if (!hasDiff || !hasMinus || !hasPlus) return false;
-  const lower = diffText.toLowerCase();
-  if (lower.includes("here is") || lower.includes("sure") || lower.includes("explanation:")) {
-    return false;
-  }
-  return true;
-}
-
-function getTouchedFiles(diffText) {
-  const files = new Set();
-  const lines = diffText.split(/\r?\n/);
-  for (const line of lines) {
-    if (line.startsWith("+++ b/")) {
-      const p = line.slice("+++ b/".length).trim();
-      if (p && p !== "/dev/null") files.add(p);
-    }
-  }
-  return Array.from(files);
-}
-
-function isAllowlisted(path, allowPrefixes) {
-  return allowPrefixes.some((p) => path.startsWith(p));
-}
-
-function isDenylisted(path, denyPrefixes, allowPackageLock) {
-  if (denyPrefixes.some((p) => path.startsWith(p))) return true;
-  if (path === ".env" || path.startsWith(".env.")) return true;
-  if (!allowPackageLock && path === "package-lock.json") return true;
-  if (/(^|\/)secrets(\/|$)/i.test(path)) return true;
-  return false;
+function parseCommand(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split(/\s+/);
+  if (parts[0] !== "/ai") return "";
+  if (parts.length === 1) return "/ai";
+  if (parts.length === 2 && parts[1] === "apply") return "/ai apply";
+  return "";
 }
 
 function escapeBody(body) {
   return String(body).replace(/`/g, "\\`").replace(/"/g, '\\"');
 }
 
+function commentIssue(repo, issueNumber, body) {
+  sh(
+    `gh issue comment ${issueNumber} --repo ${repo} --body "${escapeBody(body)}"`
+  );
+}
+
+function commentPr(repo, prNumber, body) {
+  sh(`gh pr comment ${prNumber} --repo ${repo} --body "${escapeBody(body)}"`);
+}
+
+function isSafePath(p) {
+  if (!p || typeof p !== "string") return false;
+  if (p.includes("..")) return false;
+  if (path.isAbsolute(p)) return false;
+  return true;
+}
+
 async function main() {
   const repo = mustEnv("REPO");
   const issueNumber = mustEnv("ISSUE_NUMBER");
-  const actor = mustEnv("ACTOR");
-  mustEnv("GITHUB_TOKEN");
   const aiKey = mustEnv("AI_API_KEY");
+  const commentBody = process.env.COMMENT_BODY || "";
+
+  const cmd = parseCommand(commentBody);
+  if (cmd !== "/ai apply") {
+    process.exit(0);
+  }
+
+  const labels = sh(
+    `gh api repos/${repo}/issues/${issueNumber} --jq '.labels[].name' || true`
+  );
+  if (!labels.split(/\r?\n/).includes("ai-processed")) {
+    commentIssue(
+      repo,
+      issueNumber,
+      "Please run /ai first (dry-run) before /ai apply."
+    );
+    process.exit(0);
+  }
 
   const branch = `ai/issue-${issueNumber}`;
-
-  const issue = ghJson(`gh api repos/${repo}/issues/${issueNumber}`);
-  const issueTitle = issue?.title || "";
-  const issueBody = issue?.body || "";
-
   const prNumber = sh(
     `gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number'`
   );
@@ -145,224 +138,184 @@ async function main() {
     process.exit(1);
   }
 
-  const defaultBranch = sh(`gh api repos/${repo} --jq .default_branch`);
-  const defaultRef = sh(
-    `gh api repos/${repo}/git/refs/heads/${defaultBranch} --jq .object.sha`
-  );
-  const tree = ghJson(
-    `gh api repos/${repo}/git/trees/${defaultRef}?recursive=1`
-  );
-
-  const allowPrefixes = ["app/", "api/", "src/", "web/", "migrations/", "docs/"];
-  const denyPrefixes = [".github/workflows/", ".github/scripts/", "node_modules/"];
-  const allowPackageLock = /package-lock\.json/i.test(
-    `${issueTitle}\n${issueBody}`
-  );
-
-  const allowedTree = (tree?.tree || [])
-    .filter((t) => t.type === "blob")
-    .map((t) => t.path)
-    .filter((p) => isAllowlisted(p, allowPrefixes))
-    .filter((p) => !isDenylisted(p, denyPrefixes, allowPackageLock))
-    .sort();
-
-  const prompt = [
-    `You are an AI coding assistant. Return ONLY a unified diff (git patch).`,
-    `No explanations.`,
-    ``,
-    `Issue title: ${issueTitle}`,
-    `Issue body:`,
-    issueBody || "(empty)",
-    ``,
-    `Allowed paths: ${allowPrefixes.join(", ")}`,
-    `Deny paths: .github/workflows/, .github/scripts/, .env, secrets, node_modules/, package-lock.json`,
-    ``,
-    `Repository files (allowed only):`,
-    ...allowedTree.map((p) => `- ${p}`),
-    ``,
-    `Constraints:`,
-    `- Touch only allowlisted paths.`,
-    `- Do not touch denylisted paths.`,
-    `- Output ONLY the diff.`,
-  ].join("\n");
-
-  const payload = JSON.stringify({
-    model: process.env.AI_MODEL || "gpt-4.1-mini",
-    input: prompt,
-    temperature: 0,
-  });
-
-  let response;
-  try {
-    response = await httpJson("https://api.openai.com/v1/responses", {
-      Authorization: `Bearer ${aiKey}`,
-      "Content-Type": "application/json",
-      "Content-Length": Buffer.byteLength(payload),
-    }, payload);
-  } catch (err) {
-    const isQuota =
-      err?.statusCode === 429 || err?.errorCode === "insufficient_quota";
-    if (isQuota) {
-      console.error("AI apply blocked: OpenAI quota/billing exhausted.");
-      const blockedMsg =
-        "🚫 AI apply blocked: OpenAI quota/billing exhausted for AI_API_KEY. Please fix billing or update the key, then re-run /ai apply.";
-      sh(
-        `gh issue comment ${issueNumber} --repo ${repo} --body "${blockedMsg.replace(/"/g, '\\"')}"`
-      );
-      if (prNumber) {
-        sh(
-          `gh pr comment ${prNumber} --repo ${repo} --body "${blockedMsg.replace(/"/g, '\\"')}"`
-        );
+  const lockDir = path.join(".ai", "locks");
+  const lockPath = path.join(lockDir, `issue-${issueNumber}.lock`);
+  fs.mkdirSync(lockDir, { recursive: true });
+  if (fs.existsSync(lockPath)) {
+    const raw = fs.readFileSync(lockPath, "utf8").trim();
+    const last = Number(raw);
+    if (Number.isFinite(last)) {
+      const deltaMs = Date.now() - last;
+      if (deltaMs < 2 * 60 * 1000) {
+        commentIssue(repo, issueNumber, "Cooldown active, try again in 2 minutes.");
+        process.exit(0);
       }
-      sh(
-        `gh issue edit ${issueNumber} --repo ${repo} --add-label "ai-blocked" || true`
-      );
-      process.exit(0);
-    }
-    throw err;
-  }
-
-  const rawText = extractDiffText(response);
-  const diffText = extractUnifiedDiff(rawText);
-  if (!diffText || !isProbablyValidDiff(diffText)) {
-    const snippet = rawText
-      .split(/\r?\n/)
-      .slice(0, 40)
-      .join("\n");
-    const msg =
-      "🚫 AI produced an invalid patch format (corrupt/unified diff missing). Please refine the issue or re-run /ai apply. The PR was not changed.";
-    const details = [
-      "<details>",
-      "<summary>Raw AI output (first ~40 lines)</summary>",
-      "",
-      "```",
-      snippet,
-      "```",
-      "</details>",
-    ].join("\n");
-    sh(
-      `gh issue comment ${issueNumber} --repo ${repo} --body "${escapeBody(`${msg}\n\n${details}`)}"`
-    );
-    if (prNumber) {
-      sh(
-        `gh pr comment ${prNumber} --repo ${repo} --body "${escapeBody(`${msg}\n\n${details}`)}"`
-      );
-    }
-    process.exit(0);
-  }
-  const maxBytes = 200_000;
-  if (Buffer.byteLength(diffText, "utf8") > maxBytes) {
-    console.error("AI diff exceeds size limit");
-    process.exit(1);
-  }
-
-  const touchedFiles = getTouchedFiles(diffText);
-  if (touchedFiles.length === 0) {
-    console.error("AI diff touches no files");
-    process.exit(1);
-  }
-
-  for (const file of touchedFiles) {
-    if (!isAllowlisted(file, allowPrefixes)) {
-      console.error(`Diff touches non-allowlisted path: ${file}`);
-      process.exit(1);
-    }
-    if (isDenylisted(file, denyPrefixes, allowPackageLock)) {
-      console.error(`Diff touches denylisted path: ${file}`);
-      process.exit(1);
     }
   }
+  fs.writeFileSync(lockPath, String(Date.now()), "utf8");
 
   sh(`git config user.name "github-actions[bot]"`);
   sh(`git config user.email "41898282+github-actions[bot]@users.noreply.github.com"`);
   sh(`git fetch origin ${branch} --depth=1`);
   sh(`git checkout ${branch}`);
 
-  sh(`mkdir -p .ai`);
-  const patchPath = `.ai/ai_patch_${issueNumber}.diff`;
-  fs.writeFileSync(patchPath, diffText, "utf8");
+  const issue = ghJson(`gh api repos/${repo}/issues/${issueNumber}`);
+  const issueTitle = issue?.title || "";
+  const issueBody = issue?.body || "";
 
-  try {
-    sh(`git apply --check ${patchPath}`);
-  } catch (err) {
-    const out = (err?.stderr || err?.stdout || err?.message || "").toString();
-    const msg =
-      "🚫 Patch could not be applied cleanly (git apply --check failed). No changes were committed.";
-    const details = [
-      "<details>",
-      "<summary>git apply --check output</summary>",
-      "",
-      "```",
-      out.trim(),
-      "```",
-      "</details>",
-    ].join("\n");
-    sh(
-      `gh issue comment ${issueNumber} --repo ${repo} --body "${escapeBody(`${msg}\n\n${details}`)}"`
+  const allowlist = ["web/index.html"];
+  const targetPath = allowlist[0];
+  if (!fs.existsSync(targetPath)) {
+    commentIssue(
+      repo,
+      issueNumber,
+      `Missing required file: ${targetPath}.`
     );
-    if (prNumber) {
-      sh(
-        `gh pr comment ${prNumber} --repo ${repo} --body "${escapeBody(`${msg}\n\n${details}`)}"`
-      );
+    process.exit(1);
+  }
+  const currentContent = fs.readFileSync(targetPath, "utf8");
+
+  const prompt = [
+    "You are an AI coding assistant.",
+    "Return ONLY valid JSON. No markdown, no code fences, no explanations.",
+    "JSON schema:",
+    "{",
+    '  "files": [',
+    '    { "path": "web/index.html", "content": "<full file content as string>" }',
+    "  ],",
+    '  "summary": "short summary",',
+    '  "notes": "optional"',
+    "}",
+    "",
+    "Allowed paths: web/index.html only.",
+    "Task: remove the API Docs button from the landing page without layout gaps.",
+    "",
+    `Issue title: ${issueTitle}`,
+    "Issue body:",
+    issueBody || "(empty)",
+    "",
+    "Current web/index.html:",
+    "-----",
+    currentContent,
+    "-----",
+  ].join("\n");
+
+  const payload = JSON.stringify({
+    model: process.env.AI_MODEL || "gpt-4.1-mini",
+    input: prompt,
+    temperature: 0,
+    response_format: { type: "json_object" },
+  });
+
+  let response;
+  try {
+    response = await httpJson(
+      "https://api.openai.com/v1/responses",
+      {
+        Authorization: `Bearer ${aiKey}`,
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload),
+      },
+      payload
+    );
+  } catch (err) {
+    const isQuota =
+      err?.statusCode === 429 || err?.errorCode === "insufficient_quota";
+    if (isQuota) {
+      const blockedMsg =
+        "AI apply blocked: OpenAI quota/billing exhausted for AI_API_KEY. Please fix billing or update the key, then re-run /ai apply.";
+      commentIssue(repo, issueNumber, blockedMsg);
+      process.exit(0);
     }
+    throw err;
+  }
+
+  const rawText = extractJsonText(response);
+  const jsonText = rawText.replace(/```json\\s*/gi, "").replace(/```/g, "");
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (err) {
+    commentIssue(
+      repo,
+      issueNumber,
+      "AI response was not valid JSON. Please refine the issue and try again."
+    );
     process.exit(0);
   }
 
-  try {
-    sh(`git apply ${patchPath}`);
-  } catch (err) {
-    console.error(`Patch apply failed: ${err?.message || err}`);
-    process.exit(1);
-  } finally {
-    fs.unlinkSync(patchPath);
+  const files = Array.isArray(parsed?.files) ? parsed.files : [];
+  if (files.length === 0) {
+    commentIssue(
+      repo,
+      issueNumber,
+      "AI response contained no files to write."
+    );
+    process.exit(0);
   }
 
-  const changed = sh(`git diff --name-only`).split(/\r?\n/).filter(Boolean);
-  if (changed.length === 0) {
-    console.error("No changes after applying patch");
+  for (const file of files) {
+    if (!isSafePath(file?.path)) {
+      commentIssue(
+        repo,
+        issueNumber,
+        "AI response contained an unsafe file path."
+      );
+      process.exit(0);
+    }
+    if (!allowlist.includes(file.path)) {
+      commentIssue(
+        repo,
+        issueNumber,
+        `AI response attempted to write a non-allowlisted path: ${file.path}.`
+      );
+      process.exit(0);
+    }
+    if (typeof file.content !== "string") {
+      commentIssue(
+        repo,
+        issueNumber,
+        `AI response had non-string content for ${file.path}.`
+      );
+      process.exit(0);
+    }
+  }
+
+  for (const file of files) {
+    const dir = path.dirname(file.path);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file.path, file.content, "utf8");
+  }
+
+  const diffStat = sh("git diff --stat");
+  if (!diffStat.trim()) {
+    commentIssue(
+      repo,
+      issueNumber,
+      "No changes detected after applying AI output."
+    );
     process.exit(1);
   }
 
+  const changed = sh("git diff --name-only").split(/\r?\n/).filter(Boolean);
   sh(`git add ${changed.join(" ")}`);
-  const commitMsg = `feat(ai): apply changes for issue #${issueNumber}`;
-  sh(`git commit -m "${commitMsg}"`);
-  const commitHash = sh(`git rev-parse HEAD`);
-
-  const summaryPath = `.ai/APPLY_SUMMARY.md`;
-  const summary = [
-    `# AI Apply Summary`,
-    ``,
-    `- Issue: #${issueNumber}`,
-    `- Commit: ${commitHash}`,
-    `- Actor: ${actor}`,
-    `- Timestamp: ${new Date().toISOString()}`,
-    ``,
-    `## Files Changed`,
-    ...changed.map((f) => `- ${f}`),
-    ``,
-  ].join("\n");
-  fs.writeFileSync(summaryPath, summary, "utf8");
-  sh(`git add ${summaryPath}`);
-  sh(`git commit -m "chore(ai): add apply summary for issue #${issueNumber}"`);
-
+  sh(`git commit -m "chore(ui): remove API Docs button from landing page"`);
   sh(`git push -u origin ${branch}`);
 
-  const commentBody = [
-    `Applied AI changes for issue #${issueNumber}.`,
-    ``,
-    `Files changed:`,
-    ...changed.map((f) => `- ${f}`),
-    ``,
-    `Checklist:`,
-    `- [ ] Verify changes match the issue requirements`,
-    `- [ ] Review for correctness and style`,
-    `- [ ] Run tests (if applicable)`,
-    ``,
-    `Source issue: #${issueNumber}`,
-  ].join("\n");
-  sh(
-    `gh pr comment ${prNumber} --repo ${repo} --body "${commentBody.replace(/"/g, '\\"')}"`
-  );
+  const summary = typeof parsed?.summary === "string" && parsed.summary.trim()
+    ? parsed.summary.trim()
+    : "Removed API Docs button from landing page.";
+  const notes = typeof parsed?.notes === "string" && parsed.notes.trim()
+    ? parsed.notes.trim()
+    : "";
+  const prComment = [
+    `Summary: ${summary}`,
+    notes ? "" : null,
+    notes ? `Notes: ${notes}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  commentPr(repo, prNumber, prComment);
 }
 
 main().catch((err) => {

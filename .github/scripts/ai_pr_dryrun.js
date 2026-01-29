@@ -23,6 +23,7 @@ const repo = mustEnv("REPO");
 const issueNumber = mustEnv("ISSUE_NUMBER");
 const actor = mustEnv("ACTOR");
 const githubEnv = mustEnv("GITHUB_ENV");
+const commentBody = process.env.COMMENT_BODY || "";
 
 const branch = `ai/issue-${issueNumber}`;
 const title = `AI (dry-run): Issue #${issueNumber}`;
@@ -35,27 +36,40 @@ const body = [
   `- Source issue: #${issueNumber}`,
 ].join("\n");
 
+function parseCommand(raw) {
+  const trimmed = String(raw || "").trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split(/\s+/);
+  if (parts[0] !== "/ai") return "";
+  if (parts.length === 1) return "/ai";
+  if (parts.length === 2 && parts[1] === "apply") return "/ai apply";
+  return "";
+}
+
 try {
+  const cmd = parseCommand(commentBody);
+  if (cmd !== "/ai") {
+    process.exit(0);
+  }
+
   const existing = sh(
     `gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number' || true`
   );
   if (existing) {
     fs.appendFileSync(githubEnv, `PR_NUMBER=${existing}\n`, "utf8");
     console.log(`PR already exists: #${existing}`);
-    process.exit(0);
-  }
+  } else {
+    sh(`git config user.name "github-actions[bot]"`);
+    sh(`git config user.email "41898282+github-actions[bot]@users.noreply.github.com"`);
 
-  sh(`git config user.name "github-actions[bot]"`);
-  sh(`git config user.email "41898282+github-actions[bot]@users.noreply.github.com"`);
+    const defaultBranch = sh(`git remote show origin | sed -n '/HEAD branch/s/.*: //p'`);
+    sh(`git fetch origin ${defaultBranch} --depth=1`);
 
-  const defaultBranch = sh(`git remote show origin | sed -n '/HEAD branch/s/.*: //p'`);
-  sh(`git fetch origin ${defaultBranch} --depth=1`);
+    sh(`git checkout -B ${branch} origin/${defaultBranch}`);
 
-  sh(`git checkout -B ${branch} origin/${defaultBranch}`);
-
-  const markerPath = `.ai/DRY_RUN_ISSUE_${issueNumber}.md`;
-  sh(`mkdir -p .ai`);
-  sh(`bash -lc 'cat > ${markerPath} <<EOF
+    const markerPath = `.ai/DRY_RUN_ISSUE_${issueNumber}.md`;
+    sh(`mkdir -p .ai`);
+    sh(`bash -lc 'cat > ${markerPath} <<EOF
 # AI Dry Run
 
 This file is a placeholder created by the GitHub Action.
@@ -65,22 +79,40 @@ This file is a placeholder created by the GitHub Action.
 
 EOF'`);
 
-  sh(`git add ${markerPath}`);
+    sh(`git add ${markerPath}`);
 
-  const status = sh(`git status --porcelain`);
-  if (status.length > 0) {
-    sh(`git commit -m "chore(ai): dry-run placeholder for issue #${issueNumber}"`);
-    sh(`git push -u origin ${branch} --force`);
-  } else {
-    sh(`git push -u origin ${branch} --force`);
+    const status = sh(`git status --porcelain`);
+    if (status.length > 0) {
+      sh(`git commit -m "chore(ai): dry-run placeholder for issue #${issueNumber}"`);
+      sh(`git push -u origin ${branch} --force`);
+    } else {
+      sh(`git push -u origin ${branch} --force`);
+    }
+
+    const created = sh(
+      `gh pr create --repo ${repo} --head ${branch} --base ${defaultBranch} --draft --title "${title}" --body "${body.replace(/"/g, '\\"')}" --json number --jq .number`
+    );
+    fs.appendFileSync(githubEnv, `PR_NUMBER=${created}\n`, "utf8");
+    console.log(`Draft PR created: #${created}`);
   }
 
-  const created = sh(
-    `gh pr create --repo ${repo} --head ${branch} --base ${defaultBranch} --draft --title "${title}" --body "${body.replace(/"/g, '\\"')}" --json number --jq .number`
+  const prNumber = sh(
+    `gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number'`
   );
-  fs.appendFileSync(githubEnv, `PR_NUMBER=${created}\n`, "utf8");
-
-  console.log(`Draft PR created: #${created}`);
+  if (!prNumber) {
+    console.error("PR number missing; aborting comment.");
+    process.exit(1);
+  }
+  const prUrl = sh(
+    `gh pr view ${prNumber} --repo ${repo} --json url --jq .url`
+  );
+  const comment = `AI dry-run ready. Draft PR: #${prNumber} (${prUrl})`;
+  sh(
+    `gh issue comment ${issueNumber} --repo ${repo} --body "${comment.replace(/"/g, '\\"')}"`
+  );
+  sh(
+    `gh issue edit ${issueNumber} --repo ${repo} --add-label "ai-processed" || true`
+  );
 } catch (err) {
   console.error(err?.message || err);
   process.exit(1);

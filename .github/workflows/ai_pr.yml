@@ -33,6 +33,8 @@ jobs:
   ai_dry_run_pr:
     if: github.event_name == 'issue_comment' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Safety gate
@@ -67,34 +69,18 @@ jobs:
       - name: Create Draft PR (dry-run)
         if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
           ACTOR: ${{ github.actor }}
+          COMMENT_BODY: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
         run: node .github/scripts/ai_pr_dryrun.js
-      - name: Comment back on Issue
-        if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
-          REPO: ${{ github.repository }}
-        run: |
-          gh issue comment "$ISSUE_NUMBER" \
-            --repo "$REPO" \
-            --body "🤖 **AI dry-run gestartet.** Draft PR: #${PR_NUMBER}"
-      - name: Add ai-processed label
-        if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
-          REPO: ${{ github.repository }}
-        run: gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "ai-processed"
-        continue-on-error: true
 
   ai_apply_pr:
     if: github.event_name == 'issue_comment' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
 
     steps:
       - name: Safety gate
@@ -119,19 +105,6 @@ jobs:
           if [ "$TRIMMED" != "/ai apply" ]; then
             exit 0
           fi
-      - name: Check ai-processed label
-        if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          LABELS="$(gh api repos/$REPO/issues/$ISSUE_NUMBER --jq '.labels[].name' || true)"
-          if ! printf '%s\n' "$LABELS" | grep -xq "ai-processed"; then
-            gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "⚠️ Please run /ai first (dry-run) before /ai apply."
-            exit 0
-          fi
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Node
@@ -139,39 +112,24 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Restore apply cooldown cache
+        uses: actions/cache@v4
+        with:
+          path: .ai/locks
+          key: ai-apply-lock-issue-${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}-${{ github.run_id }}
+          restore-keys: |
+            ai-apply-lock-issue-${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}-
+
       - name: Apply AI Patch
         id: apply
         if: ${{ github.event_name == 'issue_comment' || inputs.issue_number != '' }}
         env:
-          GITHUB_TOKEN: ${{ github.token }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
           ACTOR: ${{ github.actor }}
+          COMMENT_BODY: ${{ github.event_name == 'issue_comment' && github.event.comment.body || inputs.command }}
         run: |
           set -euo pipefail
           mkdir -p .ai
           node .github/scripts/ai_pr_apply.js 2>&1 | tee .ai/apply.log
-
-      - name: Comment success on Issue and PR
-        if: ${{ success() && (github.event_name == 'issue_comment' || inputs.issue_number != '') }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
-          REPO: ${{ github.repository }}
-        run: |
-          PR_NUMBER="$(gh pr list --repo "$REPO" --head "ai/issue-$ISSUE_NUMBER" --json number --jq '.[0].number')"
-          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "AI apply succeeded. Draft PR: #${PR_NUMBER}"
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "AI apply succeeded for issue #${ISSUE_NUMBER}."
-          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --add-label "ai-applied"
-
-      - name: Comment failure on Issue
-        if: ${{ failure() && (github.event_name == 'issue_comment' || inputs.issue_number != '') }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          ISSUE_NUMBER: ${{ github.event_name == 'issue_comment' && github.event.issue.number || inputs.issue_number }}
-          REPO: ${{ github.repository }}
-        run: |
-          ERR="$(tail -n 40 .ai/apply.log | sed 's/`/\\`/g')"
-          gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "AI apply failed.\n\n```\n${ERR}\n```"
-
