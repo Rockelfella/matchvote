@@ -1,0 +1,42 @@
+name: Smoke Dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      note:
+        description: "Optional note"
+        required: false
+        default: "smoke"
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo context
+        run: |
+          echo "actor: ${GITHUB_ACTOR}"
+          echo "ref: ${GITHUB_REF}"
+          echo "sha: ${GITHUB_SHA}"
+          echo "note: ${{ inputs.note }}"
+      - name: Write smoke file
+        run: |
+          {
+            echo "timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+            echo "actor: ${GITHUB_ACTOR}"
+            echo "ref: ${GITHUB_REF}"
+            echo "sha: ${GITHUB_SHA}"
+            echo "note: ${{ inputs.note }}"
+          } > smoke.txt
+      - name: Upload smoke proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-proof
+          path: smoke.txt
+      - name: Add run summary
+        run: |
+          {
+            echo "actor: ${GITHUB_ACTOR}"
+            echo "ref: ${GITHUB_REF}"
+            echo "sha: ${GITHUB_SHA}"
+            echo "artifact: smoke-proof"
+          } >> "$GITHUB_STEP_SUMMARY"
