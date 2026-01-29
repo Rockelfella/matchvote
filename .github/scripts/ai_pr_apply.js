@@ -163,8 +163,8 @@ async function main() {
   const issueTitle = issue?.title || "";
   const issueBody = issue?.body || "";
 
-  const allowlist = ["web/index.html"];
-  const targetPath = allowlist[0];
+  const allowlist = ["index.html", "web/index.html"];
+  const targetPath = "web/index.html";
   if (!fs.existsSync(targetPath)) {
     commentIssue(
       repo,
