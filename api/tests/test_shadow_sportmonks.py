@@ -46,3 +46,16 @@ def test_shadow_handles_connect_timeout(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert result == 0
     assert "sportmonks fetch failed: ConnectTimeout" in out
+
+
+def test_shadow_logs_no_live_matches_and_status(monkeypatch, capsys):
+    cli = _reload_cli(monkeypatch, provider="sportmonks", token="token")
+    def _ok(*args, **kwargs):
+        return ({}, 503, 12)
+    monkeypatch.setattr(cli, "fetch_inplay_readonly", _ok)
+    result = cli._run_shadow_inplay(cli.argparse.Namespace(limit=5))
+    out = capsys.readouterr().out
+    assert result == 0
+    assert "inplay: status=503" in out
+    assert "no live matches right now" in out
+    assert "reason=http_error" in out
