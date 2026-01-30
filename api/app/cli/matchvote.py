@@ -4,11 +4,11 @@ import argparse
 import sys
 import traceback
 
+import httpx
+
 from app.core import settings
-from app.core.sportmonks import get_sportmonks_api_token
-from app.core.sportmonks.client import SportMonksClient
+from app.core.sportmonks.fetcher import fetch_inplay_readonly
 from app.core.sportmonks.normalizer import normalize_fixture
-from app.core.sportmonks.service import poll_inplay_and_persist, sync_league_schedule
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -34,6 +34,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _run_sync_schedules(args: argparse.Namespace) -> int:
+    from app.core.sportmonks.service import sync_league_schedule
+
     if not settings.SPORTMONKS_ENABLED:
         print("[sportmonks] disabled")
         return 0
@@ -60,6 +62,8 @@ def _run_sync_schedules(args: argparse.Namespace) -> int:
 
 
 def _run_poll_inplay(_args: argparse.Namespace) -> int:
+    from app.core.sportmonks.service import poll_inplay_and_persist
+
     if not settings.SPORTMONKS_ENABLED:
         print("[sportmonks] disabled")
         return 0
@@ -97,13 +101,13 @@ def _run_shadow_inplay(args: argparse.Namespace) -> int:
 
     settings.validate_settings()
 
-    client = SportMonksClient(get_sportmonks_api_token())
     try:
-        payload = client.get_livescores_inplay(
-            include="participants;events;league;season",
+        payload = fetch_inplay_readonly(include="participants;events;league;season")
+    except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError) as exc:
+        print(
+            f"[shadow] sportmonks fetch failed: {exc.__class__.__name__} -> exit 0"
         )
-    finally:
-        client.close()
+        return 0
 
     fixtures = _extract_fixtures(payload)
     normalized = []

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 
 import pytest
+import httpx
 
 
 def _reload_cli(monkeypatch, provider: str | None, token: str | None):
@@ -34,3 +35,14 @@ def test_shadow_fails_fast_without_token_when_provider_sportmonks(monkeypatch):
     cli = _reload_cli(monkeypatch, provider="sportmonks", token=None)
     with pytest.raises(RuntimeError):
         cli._run_shadow_inplay(cli.argparse.Namespace(limit=5))
+
+
+def test_shadow_handles_connect_timeout(monkeypatch, capsys):
+    cli = _reload_cli(monkeypatch, provider="sportmonks", token="token")
+    def _raise(*args, **kwargs):
+        raise httpx.ConnectTimeout("handshake")
+    monkeypatch.setattr(cli, "fetch_inplay_readonly", _raise)
+    result = cli._run_shadow_inplay(cli.argparse.Namespace(limit=5))
+    out = capsys.readouterr().out
+    assert result == 0
+    assert "sportmonks fetch failed: ConnectTimeout" in out
