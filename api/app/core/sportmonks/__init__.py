@@ -18,7 +18,7 @@ def get_sportmonks_api_token() -> str:
 
 def init_sportmonks_client() -> Optional[SportMonksClient]:
     global _sportmonks_client
-    if not settings.SPORTMONKS_ENABLED:
+    if not settings.is_sportmonks_active():
         _sportmonks_client = None
         return None
     _sportmonks_client = SportMonksClient(get_sportmonks_api_token())
