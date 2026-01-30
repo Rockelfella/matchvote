@@ -102,7 +102,9 @@ def _run_shadow_inplay(args: argparse.Namespace) -> int:
     settings.validate_settings()
 
     try:
-        payload = fetch_inplay_readonly(include="participants;events;league;season")
+        payload, status_code, payload_size = fetch_inplay_readonly(
+            include="participants;events;league;season"
+        )
     except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError) as exc:
         print(
             f"[shadow] sportmonks fetch failed: {exc.__class__.__name__} -> exit 0"
@@ -124,6 +126,21 @@ def _run_shadow_inplay(args: argparse.Namespace) -> int:
 
     match_ids = [item["external_match_id"] for item in normalized if item.get("external_match_id")]
     limit = max(0, int(args.limit))
+    print(
+        "[shadow] inplay: status={status} payload_bytes={size} matches={matches} events={events}".format(
+            status=status_code,
+            size=payload_size,
+            matches=len(match_ids),
+            events=len(event_ids),
+        )
+    )
+    if len(match_ids) == 0:
+        reason = "http_error" if status_code != 200 else "no_live_matches"
+        print(
+            "[shadow] inplay: no live matches right now (matches=0, events=0, reason={reason})".format(
+                reason=reason
+            )
+        )
     print(
         "[shadow] matches={matches} events={events} match_ids={match_ids} event_ids={event_ids}".format(
             matches=len(match_ids),
