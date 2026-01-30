@@ -7,7 +7,7 @@ import traceback
 import httpx
 
 from app.core import settings
-from app.core.sportmonks.fetcher import fetch_inplay_readonly
+from app.core.sportmonks.fetcher import fetch_inplay_readonly, fetch_schedule_readonly
 from app.core.sportmonks.normalizer import normalize_fixture
 
 
@@ -29,6 +29,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Shadow read-only SportMonks inplay fetch",
     )
     shadow.add_argument("--limit", type=int, default=10, help="Limit IDs logged")
+
+    shadow_schedule = subparsers.add_parser(
+        "sportmonks-shadow-schedule",
+        help="Shadow read-only SportMonks schedule fetch",
+    )
+    shadow_schedule.add_argument("--days", type=int, default=7, help="Days window")
 
     return parser
 
@@ -152,6 +158,45 @@ def _run_shadow_inplay(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_shadow_schedule(args: argparse.Namespace) -> int:
+    if settings.get_active_match_provider() != "sportmonks":
+        print("[shadow] provider != sportmonks -> exit 0")
+        return 0
+
+    settings.validate_settings()
+
+    try:
+        payload, status_code, payload_size = fetch_schedule_readonly(days=args.days)
+    except (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError) as exc:
+        print(
+            f"[shadow] sportmonks fetch failed: {exc.__class__.__name__} -> exit 0"
+        )
+        return 0
+
+    fixtures = _extract_fixtures(payload)
+    fixture_ids = []
+    for fixture in fixtures:
+        if isinstance(fixture, dict) and fixture.get("id") is not None:
+            fixture_ids.append(str(fixture.get("id")))
+
+    print(
+        "[shadow] schedule: status={status} payload_bytes={size} fixtures={fixtures}".format(
+            status=status_code,
+            size=payload_size,
+            fixtures=len(fixtures),
+        )
+    )
+    if len(fixtures) == 0:
+        print("[shadow] schedule: no fixtures in window (fixtures=0, reason=no_fixtures_in_window)")
+    else:
+        print(
+            "[shadow] schedule: fixture_ids={ids}".format(
+                ids=",".join(fixture_ids[:10])
+            )
+        )
+    return 0
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -162,6 +207,8 @@ def main() -> int:
             return _run_poll_inplay(args)
         if args.command == "sportmonks-shadow-inplay":
             return _run_shadow_inplay(args)
+        if args.command == "sportmonks-shadow-schedule":
+            return _run_shadow_schedule(args)
         raise RuntimeError(f"Unknown command: {args.command}")
     except Exception:
         traceback.print_exc()

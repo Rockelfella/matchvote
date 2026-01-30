@@ -59,3 +59,23 @@ def test_shadow_logs_no_live_matches_and_status(monkeypatch, capsys):
     assert "inplay: status=503" in out
     assert "no live matches right now" in out
     assert "reason=http_error" in out
+
+
+def test_shadow_schedule_exits_when_provider_not_sportmonks(monkeypatch, capsys):
+    cli = _reload_cli(monkeypatch, provider="openligadb", token=None)
+    result = cli._run_shadow_schedule(cli.argparse.Namespace(days=3))
+    out = capsys.readouterr().out
+    assert result == 0
+    assert "provider != sportmonks" in out
+
+
+def test_shadow_schedule_logs_summary(monkeypatch, capsys):
+    cli = _reload_cli(monkeypatch, provider="sportmonks", token="token")
+    def _ok(*args, **kwargs):
+        return ({"data": [{"id": 1}, {"id": 2}]}, 200, 64)
+    monkeypatch.setattr(cli, "fetch_schedule_readonly", _ok)
+    result = cli._run_shadow_schedule(cli.argparse.Namespace(days=7))
+    out = capsys.readouterr().out
+    assert result == 0
+    assert "schedule: status=200" in out
+    assert "fixtures=2" in out
