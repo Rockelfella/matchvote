@@ -10,8 +10,13 @@ from app.schemas.matches import MatchCreate, MatchOut
 
 from fastapi import Depends
 from app.core.user_auth import require_user
+from app.core.matches.provider_service import get_provider as get_matches_provider
 
-router = APIRouter(prefix="/matches", tags=["matches"], dependencies=[Depends(require_user)])
+router = APIRouter(
+    prefix="/matches",
+    tags=["matches"],
+    dependencies=[Depends(require_user), Depends(get_matches_provider)],
+)
 
 @router.get("", response_model=List[MatchOut])
 def list_matches(

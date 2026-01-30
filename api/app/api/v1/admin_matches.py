@@ -4,12 +4,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 
 from app.core.deps import require_admin
+from app.core.matches.provider_service import get_provider as get_matches_provider
 from app.db import engine
 
 router = APIRouter(
     prefix="/admin/matches",
     tags=["admin"],
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin), Depends(get_matches_provider)],
 )
 
 
