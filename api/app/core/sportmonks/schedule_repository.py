@@ -113,7 +113,7 @@ def insert_schedule_raw(
         insert into referee_ratings.sportmonks_schedule_raw
           (fetched_at, request_params, payload)
         values
-          (:fetched_at, :request_params::jsonb, :payload::jsonb)
+          (:fetched_at, CAST(:request_params AS jsonb), CAST(:payload AS jsonb))
         returning id
     """)
     params = {

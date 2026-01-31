@@ -171,7 +171,7 @@ def insert_inplay_raw(
         insert into referee_ratings.sportmonks_inplay_raw
           (fetched_at, fixture_id, request_params, payload)
         values
-          (:fetched_at, :fixture_id, :request_params::jsonb, :payload::jsonb)
+          (:fetched_at, :fixture_id, CAST(:request_params AS jsonb), CAST(:payload AS jsonb))
         returning id
     """)
     params = {

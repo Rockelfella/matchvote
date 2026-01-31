@@ -241,7 +241,7 @@ def insert_new_events(
         insert into referee_ratings.match_events
           (provider, fixture_id, event_id, payload)
         values
-          (:provider, :fixture_id, :event_id, :payload::jsonb)
+          (:provider, :fixture_id, :event_id, CAST(:payload AS jsonb))
         on conflict (provider, fixture_id, event_id)
         do nothing
     """)
