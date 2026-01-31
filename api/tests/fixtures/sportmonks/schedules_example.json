@@ -1,0 +1,41 @@
+[
+  {
+    "id": 19428180,
+    "starting_at": "2025-10-03 20:30:00",
+    "starting_at_timestamp": 1759525800,
+    "state_id": 5,
+    "league_id": 82,
+    "season_id": 25646,
+    "round_id": 393452,
+    "participants": [
+      { "id": 2708, "meta": { "location": "home" } },
+      { "id": 683, "meta": { "location": "away" } }
+    ]
+  },
+  {
+    "id": 19428181,
+    "starting_at": "2025-10-04 15:30:00",
+    "starting_at_timestamp": 1759565400,
+    "state_id": 5,
+    "league_id": 82,
+    "season_id": 25646,
+    "round_id": 393452,
+    "participants": [
+      { "id": 3543, "meta": { "location": "home" } },
+      { "id": 794, "meta": { "location": "away" } }
+    ]
+  },
+  {
+    "id": 19428182,
+    "starting_at": "2025-10-04 18:30:00",
+    "starting_at_timestamp": 1759576200,
+    "state_id": 5,
+    "league_id": 82,
+    "season_id": 25646,
+    "round_id": 393452,
+    "participants": [
+      { "id": 3319, "meta": { "location": "home" } },
+      { "id": 2831, "meta": { "location": "away" } }
+    ]
+  }
+]
