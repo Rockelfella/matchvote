@@ -13,9 +13,14 @@ from app.core.sportmonks.schedule_repository import (
     insert_schedule_raw,
     upsert_schedule_fixtures,
 )
+from app.core.sportmonks.inplay_repository import (
+    insert_inplay_raw,
+    upsert_inplay_state,
+)
 from app.core.sportmonks import get_sportmonks_api_token
 
 logger = logging.getLogger("uvicorn.error")
+
 
 def _extract_fixtures(payload: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
     data = payload.get("data")
@@ -26,6 +31,7 @@ def _extract_fixtures(payload: Dict[str, Any]) -> Iterable[Dict[str, Any]]:
         return fixtures
     return []
 
+
 def _extract_schedule_stages(payload: Any) -> List[Dict[str, Any]]:
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
@@ -35,7 +41,10 @@ def _extract_schedule_stages(payload: Any) -> List[Dict[str, Any]]:
             return [item for item in data if isinstance(item, dict)]
     return []
 
-def _iter_schedule_fixtures(stages: List[Dict[str, Any]]) -> Iterable[Tuple[Dict[str, Any], Dict[str, Any], Optional[Dict[str, Any]]]]:
+
+def _iter_schedule_fixtures(
+    stages: List[Dict[str, Any]]
+) -> Iterable[Tuple[Dict[str, Any], Dict[str, Any], Optional[Dict[str, Any]]]]:
     for stage in stages:
         rounds = stage.get("rounds")
         if isinstance(rounds, list) and rounds:
@@ -52,7 +61,10 @@ def _iter_schedule_fixtures(stages: List[Dict[str, Any]]) -> Iterable[Tuple[Dict
                 if isinstance(fixture, dict):
                     yield fixture, stage, None
 
-def _parse_matchday(round_item: Optional[Dict[str, Any]]) -> Tuple[Optional[int], Optional[str], Optional[str]]:
+
+def _parse_matchday(
+    round_item: Optional[Dict[str, Any]]
+) -> Tuple[Optional[int], Optional[str], Optional[str]]:
     if not round_item:
         return None, None, None
     name = round_item.get("name")
@@ -68,6 +80,7 @@ def _parse_matchday(round_item: Optional[Dict[str, Any]]) -> Tuple[Optional[int]
         number = None
     name_en = f"Matchday {number}" if number is not None else None
     return number, name_str, name_en
+
 
 def _map_schedule_fixture(
     fixture: Dict[str, Any],
@@ -97,6 +110,7 @@ def _map_schedule_fixture(
         "provider_round_id": fixture.get("round_id") if isinstance(round_item, dict) else None,
     }
 
+
 def sync_team_schedule(team_id: int) -> int:
     if not settings.SPORTMONKS_ENABLED:
         raise RuntimeError("SPORTMONKS_ENABLED is false")
@@ -119,6 +133,7 @@ def sync_team_schedule(team_id: int) -> int:
         return upsert_matches(mapped)
     finally:
         client.close()
+
 
 def sync_league_schedule(league_code: str, season_key: str) -> Dict[str, int]:
     if not settings.SPORTMONKS_ENABLED:
@@ -151,15 +166,22 @@ def sync_league_schedule(league_code: str, season_key: str) -> Dict[str, int]:
     finally:
         client.close()
 
+
 def poll_inplay_and_persist() -> int:
     if not settings.SPORTMONKS_ENABLED:
         raise RuntimeError("SPORTMONKS_ENABLED is false")
 
     client = SportMonksClient(get_sportmonks_api_token())
     try:
-        payload = client.get_livescores_inplay(
-            include="participants;scores;periods;events;league.country;round"
+        fetched_at = datetime.now(timezone.utc)
+        include = "participants;scores;periods;events;league.country;round"
+        payload = client.get_livescores_inplay(include=include)
+        insert_inplay_raw(
+            payload,
+            {"include": include},
+            fetched_at=fetched_at,
         )
+        state_result = upsert_inplay_state(payload, fetched_at=fetched_at)
         fixtures = _extract_fixtures(payload)
         mapped = []
         for item in fixtures:
@@ -168,8 +190,14 @@ def poll_inplay_and_persist() -> int:
                 continue
             mapped.append(match)
 
-        # vorerst nur Matches upserten (Events sp√§ter)
+        # vorerst nur Matches upserten (Events sp‰ter)
         upsert_matches(mapped)
+        logger.info(
+            "sportmonks inplay fetched fixtures=%s stored=%s fetched_at=%s",
+            len(mapped),
+            state_result.get("processed"),
+            fetched_at.isoformat(),
+        )
         return len(mapped)
     finally:
         client.close()

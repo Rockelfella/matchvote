@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, status
 
 from app.core.admin_auth import require_admin_basic
-from app.core.sportmonks.service import poll_inplay_and_persist, sync_team_schedule
+from app.core.sportmonks.service import sync_team_schedule
+from app.core.sportmonks.inplay_repository import get_inplay_snapshot
 
 router = APIRouter(
     prefix="/admin/sportmonks",
@@ -18,5 +19,9 @@ def sync_team(team_id: int):
 
 @router.post("/poll/inplay", status_code=status.HTTP_200_OK)
 def poll_inplay():
-    result = poll_inplay_and_persist()
-    return {"matches_upserted": result}
+    snapshot = get_inplay_snapshot()
+    return {
+        "matches_upserted": 0,
+        "last_fetched_at": snapshot.get("last_fetched_at"),
+        "fixtures": snapshot.get("fixtures"),
+    }
