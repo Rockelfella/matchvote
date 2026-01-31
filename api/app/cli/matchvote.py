@@ -9,6 +9,7 @@ from pathlib import Path
 import httpx
 
 from app.core import settings
+from app.core.providers.sportmonks.participants import parse_participants_from_schedules
 from app.core.providers.sportmonks.schedules import parse_schedules
 from app.core.sportmonks.fetcher import fetch_inplay_readonly, fetch_schedule_readonly
 from app.core.sportmonks.normalizer import normalize_fixture
@@ -62,6 +63,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Print normalized fixtures as JSON",
+    )
+
+    shadow_participants = shadow_sub.add_parser(
+        "participants",
+        help="Shadow read-only SportMonks participants (file-based)",
+    )
+    shadow_participants.add_argument(
+        "--from-file",
+        default=_default_shadow_schedule_path(),
+        help="Load schedules payload from JSON file",
+    )
+    shadow_participants.add_argument(
+        "--json",
+        action="store_true",
+        help="Print normalized participants as JSON",
     )
 
     return parser
@@ -253,6 +269,35 @@ def _run_shadow_schedules(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_shadow_participants(args: argparse.Namespace) -> int:
+    if not settings.SPORTMONKS_ENABLED:
+        print("[shadow] provider != sportmonks -> exit 0")
+        return 0
+
+    settings.validate_settings()
+
+    payload_path = Path(args.from_file)
+    with payload_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    rows = parse_participants_from_schedules(payload)
+    unique_participants = {row["participant_id"] for row in rows if row.get("participant_id") is not None}
+    home_count = sum(1 for row in rows if row.get("location") == "home")
+    away_count = sum(1 for row in rows if row.get("location") == "away")
+    print(
+        "[shadow] participants: rows={rows} unique_participants={unique} "
+        "by_location=home:{home},away:{away}".format(
+            rows=len(rows),
+            unique=len(unique_participants),
+            home=home_count,
+            away=away_count,
+        )
+    )
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    return 0
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -268,6 +313,8 @@ def main() -> int:
         if args.command == "shadow":
             if args.shadow_command == "schedules":
                 return _run_shadow_schedules(args)
+            if args.shadow_command == "participants":
+                return _run_shadow_participants(args)
         raise RuntimeError(f"Unknown command: {args.command}")
     except Exception:
         traceback.print_exc()
