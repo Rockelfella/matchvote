@@ -21,7 +21,7 @@ class OpenLigaDBProvider:
 
 
 def get_match_provider() -> MatchesProvider:
-    if settings.get_active_match_provider() == "sportmonks":
+    if settings.SPORTMONKS_ENABLED:
         logger.info("provider=sportmonks selected")
         return SportMonksProvider()
     return OpenLigaDBProvider()

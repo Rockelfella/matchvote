@@ -6,11 +6,11 @@ import pytest
 import httpx
 
 
-def _reload_cli(monkeypatch, provider: str | None, token: str | None):
-    if provider is None:
-        monkeypatch.delenv("ACTIVE_MATCH_PROVIDER", raising=False)
+def _reload_cli(monkeypatch, enabled: bool | None, token: str | None):
+    if enabled is None:
+        monkeypatch.delenv("SPORTMONKS_ENABLED", raising=False)
     else:
-        monkeypatch.setenv("ACTIVE_MATCH_PROVIDER", provider)
+        monkeypatch.setenv("SPORTMONKS_ENABLED", "true" if enabled else "false")
     if token is None:
         monkeypatch.delenv("SPORTMONKS_API_TOKEN", raising=False)
     else:
@@ -24,7 +24,7 @@ def _reload_cli(monkeypatch, provider: str | None, token: str | None):
 
 
 def test_shadow_exits_when_provider_not_sportmonks(monkeypatch, capsys):
-    cli = _reload_cli(monkeypatch, provider="openligadb", token=None)
+    cli = _reload_cli(monkeypatch, enabled=False, token=None)
     result = cli._run_shadow_inplay(cli.argparse.Namespace(limit=5))
     out = capsys.readouterr().out
     assert result == 0
@@ -32,13 +32,13 @@ def test_shadow_exits_when_provider_not_sportmonks(monkeypatch, capsys):
 
 
 def test_shadow_fails_fast_without_token_when_provider_sportmonks(monkeypatch):
-    cli = _reload_cli(monkeypatch, provider="sportmonks", token=None)
-    with pytest.raises(RuntimeError):
+    cli = _reload_cli(monkeypatch, enabled=True, token=None)
+    with pytest.raises(ValueError):
         cli._run_shadow_inplay(cli.argparse.Namespace(limit=5))
 
 
 def test_shadow_handles_connect_timeout(monkeypatch, capsys):
-    cli = _reload_cli(monkeypatch, provider="sportmonks", token="token")
+    cli = _reload_cli(monkeypatch, enabled=True, token="token")
     def _raise(*args, **kwargs):
         raise httpx.ConnectTimeout("handshake")
     monkeypatch.setattr(cli, "fetch_inplay_readonly", _raise)
@@ -49,7 +49,7 @@ def test_shadow_handles_connect_timeout(monkeypatch, capsys):
 
 
 def test_shadow_logs_no_live_matches_and_status(monkeypatch, capsys):
-    cli = _reload_cli(monkeypatch, provider="sportmonks", token="token")
+    cli = _reload_cli(monkeypatch, enabled=True, token="token")
     def _ok(*args, **kwargs):
         return ({}, 503, 12)
     monkeypatch.setattr(cli, "fetch_inplay_readonly", _ok)
@@ -62,7 +62,7 @@ def test_shadow_logs_no_live_matches_and_status(monkeypatch, capsys):
 
 
 def test_shadow_schedule_exits_when_provider_not_sportmonks(monkeypatch, capsys):
-    cli = _reload_cli(monkeypatch, provider="openligadb", token=None)
+    cli = _reload_cli(monkeypatch, enabled=False, token=None)
     result = cli._run_shadow_schedule(cli.argparse.Namespace(days=3))
     out = capsys.readouterr().out
     assert result == 0
@@ -70,7 +70,7 @@ def test_shadow_schedule_exits_when_provider_not_sportmonks(monkeypatch, capsys)
 
 
 def test_shadow_schedule_logs_summary(monkeypatch, capsys):
-    cli = _reload_cli(monkeypatch, provider="sportmonks", token="token")
+    cli = _reload_cli(monkeypatch, enabled=True, token="token")
     def _ok(*args, **kwargs):
         return ({"data": [{"id": 1}, {"id": 2}]}, 200, 64)
     monkeypatch.setattr(cli, "fetch_schedule_readonly", _ok)
