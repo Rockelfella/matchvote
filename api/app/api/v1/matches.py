@@ -6,6 +6,10 @@ from sqlalchemy import text
 
 from app.db import engine
 from app.schemas.matches import MatchCreate, MatchOut
+from app.core import settings
+from app.core.sportmonks.league_mapping import resolve_provider_filters
+from app.core.sportmonks.schedule_mapper import map_schedule_rows
+from app.core.sportmonks.schedule_repository import list_schedule_fixtures
 
 
 from fastapi import Depends
@@ -28,6 +32,20 @@ def list_matches(
     matchday_name: Optional[str] = None,
     matchday_name_en: Optional[str] = None,
 ):
+    if settings.SPORTMONKS_ENABLED:
+        if matchday_number is not None or matchday_name or matchday_name_en:
+            return []
+        league_ids, season_ids = resolve_provider_filters(league, season)
+        if league and season and not league_ids and not season_ids:
+            return []
+        rows = list_schedule_fixtures(
+            limit=limit,
+            offset=offset,
+            league_ids=league_ids,
+            season_ids=season_ids,
+        )
+        return map_schedule_rows(rows)
+
     sql = """
         select
           match_id,
