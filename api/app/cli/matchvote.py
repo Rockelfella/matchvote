@@ -1,14 +1,24 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import traceback
+from pathlib import Path
 
 import httpx
 
 from app.core import settings
+from app.core.providers.sportmonks.schedules import parse_schedules
 from app.core.sportmonks.fetcher import fetch_inplay_readonly, fetch_schedule_readonly
 from app.core.sportmonks.normalizer import normalize_fixture
+
+
+def _default_shadow_schedule_path() -> str:
+    return str(
+        Path(__file__).resolve().parents[3]
+        / "api/tests/fixtures/sportmonks/schedules_example.json"
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -35,6 +45,24 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Shadow read-only SportMonks schedule fetch",
     )
     shadow_schedule.add_argument("--days", type=int, default=7, help="Days window")
+
+    shadow = subparsers.add_parser("shadow", help="Shadow SportMonks workflows")
+    shadow_sub = shadow.add_subparsers(dest="shadow_command", required=True)
+
+    shadow_schedules = shadow_sub.add_parser(
+        "schedules",
+        help="Shadow read-only SportMonks schedules (file-based)",
+    )
+    shadow_schedules.add_argument(
+        "--from-file",
+        default=_default_shadow_schedule_path(),
+        help="Load schedules payload from JSON file",
+    )
+    shadow_schedules.add_argument(
+        "--json",
+        action="store_true",
+        help="Print normalized fixtures as JSON",
+    )
 
     return parser
 
@@ -197,6 +225,34 @@ def _run_shadow_schedule(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_shadow_schedules(args: argparse.Namespace) -> int:
+    if not settings.SPORTMONKS_ENABLED:
+        print("[shadow] provider != sportmonks -> exit 0")
+        return 0
+
+    settings.validate_settings()
+
+    payload_path = Path(args.from_file)
+    with payload_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+
+    normalized = parse_schedules(payload)
+    fixture_ids = [
+        str(item["fixture_id"])
+        for item in normalized
+        if item.get("fixture_id") is not None
+    ]
+    print(
+        "[shadow] schedule: fixtures={count} fixture_ids={ids}".format(
+            count=len(normalized),
+            ids=",".join(fixture_ids),
+        )
+    )
+    if args.json:
+        print(json.dumps(normalized, indent=2))
+    return 0
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -209,6 +265,9 @@ def main() -> int:
             return _run_shadow_inplay(args)
         if args.command == "sportmonks-shadow-schedule":
             return _run_shadow_schedule(args)
+        if args.command == "shadow":
+            if args.shadow_command == "schedules":
+                return _run_shadow_schedules(args)
         raise RuntimeError(f"Unknown command: {args.command}")
     except Exception:
         traceback.print_exc()
