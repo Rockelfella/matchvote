@@ -5,6 +5,7 @@ import json
 import sys
 import traceback
 from pathlib import Path
+import re
 
 import httpx
 
@@ -78,6 +79,25 @@ def _build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Print normalized participants as JSON",
+    )
+
+    sportmonks = subparsers.add_parser("sportmonks", help="SportMonks utilities")
+    sportmonks_sub = sportmonks.add_subparsers(dest="sportmonks_command", required=True)
+
+    seasons = sportmonks_sub.add_parser(
+        "seasons",
+        help="List SportMonks seasons for a league",
+    )
+    seasons.add_argument("--league-id", type=int, required=True, help="League ID")
+    seasons.add_argument(
+        "--contains",
+        help="Filter seasons by substring or regex",
+    )
+    seasons.add_argument(
+        "--page-limit",
+        type=int,
+        default=5,
+        help="Max pages to fetch (per_page=50)",
     )
 
     return parser
@@ -298,6 +318,93 @@ def _run_shadow_participants(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_sportmonks_seasons(args: argparse.Namespace) -> int:
+    token = settings.SPORTMONKS_API_TOKEN
+    if not token:
+        raise ValueError("SPORTMONKS_API_TOKEN is required for sportmonks seasons")
+
+    base_url = "https://api.sportmonks.com/v3/football"
+    page_limit = max(1, int(args.page_limit))
+    matcher = re.compile(args.contains) if args.contains else None
+
+    rows = []
+    timeout = httpx.Timeout(connect=10.0, read=30.0, write=30.0, pool=10.0)
+    with httpx.Client(base_url=base_url, timeout=timeout) as client:
+        for page in range(1, page_limit + 1):
+            params = {
+                "api_token": token,
+                "include": "league",
+                "select": "id,name,league_id,is_current",
+                "filters": f"seasonLeagues:{args.league_id}",
+                "order": "desc",
+                "per_page": 50,
+                "page": page,
+            }
+            safe_params = dict(params)
+            safe_params["api_token"] = "***"
+            request_url = str(client.base_url.join("/seasons"))
+            print(f"[sportmonks] GET {request_url} params={safe_params}")
+            response = None
+            for attempt in range(2):
+                try:
+                    response = client.get("https://api.sportmonks.com/v3/football/seasons", params=params)
+                    break
+                except httpx.ReadTimeout:
+                    if attempt == 0:
+                        print("[sportmonks] read timeout, retrying once")
+                        continue
+                    raise
+            print(f"[sportmonks] status={response.status_code}")
+            if response.status_code != 200:
+                body_preview = response.text[:500]
+                print(f"[sportmonks] body_preview={body_preview}")
+                raise RuntimeError(
+                    f"SportMonks request failed with status {response.status_code}"
+                )
+            payload = response.json()
+            data = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(data, list) or not data:
+                if isinstance(payload, dict):
+                    message = payload.get("message")
+                    if isinstance(message, str):
+                        lowered = message.lower()
+                        if "don't have access" in lowered or "subscription" in lowered:
+                            raise RuntimeError(
+                                "SportMonks subscription does not grant access to seasons for this request. "
+                                "Current plan appears to be Free. Upgrade subscription or provide season_id "
+                                "manually in league_mapping.py."
+                            )
+                    keys = list(payload.keys())
+                    pagination = payload.get("pagination") if isinstance(payload.get("pagination"), dict) else None
+                    raise RuntimeError(
+                        f"SportMonks seasons response missing data: keys={keys} pagination={pagination}"
+                    )
+                raise RuntimeError("SportMonks seasons response missing data and payload is not a dict")
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or "")
+                if matcher and not matcher.search(name):
+                    continue
+                rows.append(
+                    {
+                        "id": item.get("id"),
+                        "name": name,
+                        "league_id": item.get("league_id"),
+                        "is_current": item.get("is_current"),
+                    }
+                )
+
+    header = f"{'id':>8}  {'league_id':>9}  {'current':>7}  name"
+    print(header)
+    for row in rows:
+        print(
+            f"{str(row['id']):>8}  {str(row['league_id']):>9}  "
+            f"{str(row['is_current']):>7}  {row['name']}"
+        )
+    return 0
+
+
 def main() -> int:
     parser = _build_parser()
     args = parser.parse_args()
@@ -315,6 +422,9 @@ def main() -> int:
                 return _run_shadow_schedules(args)
             if args.shadow_command == "participants":
                 return _run_shadow_participants(args)
+        if args.command == "sportmonks":
+            if args.sportmonks_command == "seasons":
+                return _run_sportmonks_seasons(args)
         raise RuntimeError(f"Unknown command: {args.command}")
     except Exception:
         traceback.print_exc()

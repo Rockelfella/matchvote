@@ -28,7 +28,7 @@ _MAPPINGS: Dict[str, Dict[str, LeagueSeasonMapping]] = {
         "2025_26": LeagueSeasonMapping(
             internal_league_code="BL2",
             season_key="2025_26",
-            provider_league_id=0,
+            provider_league_id=85,
             provider_season_id=0,
             provider_stage_id=None,
         ),
@@ -44,9 +44,25 @@ def get_league_mapping(league_code: str, season_key: str) -> LeagueSeasonMapping
         raise RuntimeError(
             f"No SportMonks mapping found for league={league_code} season={season_key}"
         )
-    if mapping.provider_league_id <= 0 or mapping.provider_season_id <= 0:
+    if mapping.provider_season_id <= 0:
         raise RuntimeError(
-            f"Invalid SportMonks mapping for league={league_code} season={season_key}"
+            "Missing SportMonks season_id for BL2 2025_26. Your subscription may not provide "
+            "seasons lookup. Provide season_id manually or upgrade subscription."
+        )
+    if mapping.provider_league_id <= 0:
+        missing = []
+        if mapping.provider_league_id <= 0:
+            missing.append("provider_league_id")
+        missing_keys = ", ".join(missing)
+        raise RuntimeError(
+            "Invalid SportMonks mapping for league={league} season={season}. "
+            "Missing or invalid: {missing}. "
+            "Update app/core/sportmonks/league_mapping.py with correct IDs."
+            .format(
+                league=league_code,
+                season=season_key,
+                missing=missing_keys,
+            )
         )
     return mapping
 
