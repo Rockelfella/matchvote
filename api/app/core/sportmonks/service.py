@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from app.core import settings
@@ -8,6 +9,10 @@ from app.core.sportmonks.client import SportMonksClient
 from app.core.sportmonks.mapper import map_fixture_to_match
 from app.core.sportmonks.league_mapping import get_league_mapping
 from app.core.sportmonks.repository import upsert_matches, upsert_schedule_matches
+from app.core.sportmonks.schedule_repository import (
+    insert_schedule_raw,
+    upsert_schedule_fixtures,
+)
 from app.core.sportmonks import get_sportmonks_api_token
 
 logger = logging.getLogger("uvicorn.error")
@@ -122,28 +127,27 @@ def sync_league_schedule(league_code: str, season_key: str) -> Dict[str, int]:
     mapping = get_league_mapping(league_code, season_key)
     client = SportMonksClient(get_sportmonks_api_token())
     try:
+        fetched_at = datetime.now(timezone.utc)
         payload = client.get_league_schedule(
             mapping.provider_league_id,
             mapping.provider_season_id,
             include="participants",
         )
-        print("payload_type", type(payload))
-        print("payload_keys", list(payload.keys()) if isinstance(payload, dict) else None)
-        if isinstance(payload, dict) and "data" in payload:
-            print("payload_data_type", type(payload["data"]))
-            if isinstance(payload["data"], list) and payload["data"]:
-                print("payload_data_first", payload["data"][0])
-            else:
-                print("payload_data_first", None)
-        return {"processed": 0, "inserted": 0, "updated": 0, "skipped": 0}
-        stages = _extract_schedule_stages(payload)
-        mapped = []
-        for fixture, stage, round_item in _iter_schedule_fixtures(stages):
-            match = _map_schedule_fixture(fixture, stage, round_item, league_code, season_key)
-            if match is None:
-                continue
-            mapped.append(match)
-        return upsert_schedule_matches(mapped)
+        request_params = {
+            "league_id": mapping.provider_league_id,
+            "season_id": mapping.provider_season_id,
+            "include": "participants",
+        }
+        insert_schedule_raw(payload, request_params, fetched_at=fetched_at)
+        result = upsert_schedule_fixtures(payload, fetched_at=fetched_at)
+        logger.info(
+            "sportmonks schedule fetched league=%s season=%s fixtures=%s fetched_at=%s",
+            league_code,
+            season_key,
+            result.get("processed"),
+            fetched_at.isoformat(),
+        )
+        return result
     finally:
         client.close()
 

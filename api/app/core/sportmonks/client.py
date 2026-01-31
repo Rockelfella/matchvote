@@ -28,9 +28,9 @@ class SportMonksClient:
         params = {
             "api_token": self._api_token,
             "season_id": season_id,
-            "include": "participants",
+            "include": include,
+            "league_id": league_id,
         }
-        print("HTTP GET", f"{self._client.base_url}{path}", params)
         response = self._client.get(
             path,
             params=params,
