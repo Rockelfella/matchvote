@@ -100,7 +100,7 @@ def _run_sync_schedules(args: argparse.Namespace) -> int:
         print(
             f"[sync-schedules] league={league} "
             f"processed={result['processed']} inserted={result['inserted']} "
-            f"updated={result['updated']} skipped={result['skipped']}"
+            f"updated={result['updated']} skipped={result.get('skipped', 0)}"
         )
         for key in total:
             total[key] += result.get(key, 0)
