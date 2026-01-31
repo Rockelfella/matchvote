@@ -101,7 +101,7 @@ def _extract_events(fixture):
 
 
 def _run_shadow_inplay(args: argparse.Namespace) -> int:
-    if settings.get_active_match_provider() != "sportmonks":
+    if not settings.SPORTMONKS_ENABLED:
         print("[shadow] provider != sportmonks -> exit 0")
         return 0
 
@@ -159,7 +159,7 @@ def _run_shadow_inplay(args: argparse.Namespace) -> int:
 
 
 def _run_shadow_schedule(args: argparse.Namespace) -> int:
-    if settings.get_active_match_provider() != "sportmonks":
+    if not settings.SPORTMONKS_ENABLED:
         print("[shadow] provider != sportmonks -> exit 0")
         return 0
 
