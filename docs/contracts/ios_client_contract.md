@@ -21,6 +21,7 @@ Stand: 2026-01-31
 - Erlaubte Werte: `de` oder `en` (alles andere faellt auf Default).
 - Fallback-Verhalten: `/scenes` default `en`, `/admin/scenes/voice-draft` default `de`.
 - Erwartung an Backend-Antworten: `scene_type_label` wird serverseitig passend zur Sprache berechnet; `description_de`, `description_en` und `description` sind enthalten (legacy = `description_de`).
+- Hinweis: `description_de` / `description_en` koennen optional geliefert werden; Client soll sie bevorzugen, mit Fallback auf `description`.
 
 ## 5) Response-Grundregeln
 - Format: JSON fuer API-Endpunkte.
